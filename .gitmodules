@@ -1,0 +1,6 @@
+[submodule "dependencies/sfml"]
+	path = dependencies/sfml
+	url = https://github.com/fowlmouth/nimrod-sfml.git
+[submodule "dependencies/chipmunk"]
+	path = dependencies/chipmunk
+	url = https://github.com/fowlmouth/nimrod-chipmunk.git
