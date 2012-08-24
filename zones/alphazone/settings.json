@@ -1,0 +1,405 @@
+{
+"vehicles":[
+ ["Masta",{
+  "anim":{
+   "file":"ships/skith/Mastakith_54x54.png",
+   "angle":90
+  },
+  "handling":{
+   "thrust":40,
+   "top_speed":30,
+   "reverse":20,
+   "rotation":2200
+  },
+  "physics":{
+   "mass":10,
+   "radius":23
+  },
+  "weapons":[   "bio_cannon",   "bio_bomb",   "bio_mine"],
+  "thrust":{
+   "timer":220,
+   "file":"thrust2_16x16.png",
+   "delay":75,
+   "offs":[[-30, 0]]}}],
+ ["Warbird",{
+  "anim":{
+   "file":"ships/ss/wbroll_36x36.png",
+   "angle":90
+  },
+  "handling":{
+   "thrust":36,
+   "top_speed":32,
+   "reverse":24,
+   "rotation":80},
+  "physics":{
+   "mass":10,
+   "radius":23},
+  "weapons":[   "bio_cannon_dual",   "bio_bomb",   "bio_mine"]
+ }],
+ ["Skithist",{
+  "anim":{
+   "file":"ships/skith/Skithist_54x54.png",
+   "angle":90},
+  "handling":{
+   "thrust":36,
+   "top_speed":32,
+   "reverse":24,
+   "rotation":80},
+  "physics":{
+   "mass":10,
+   "radius":23},
+  "weapons":[   "bio_cannon_dual",   "bio_bomb",   "bio_mine"]
+ }],
+ ["Kragath",{
+  "anim":{
+   "file":"ships/skith/Kragath_54x54.png",
+   "angle":0},
+  "handling":{
+   "thrust":36,
+   "top_speed":32,
+   "reverse":24,
+   "rotation":80},
+  "physics":{
+   "mass":10,
+   "radius":23},
+  "weapons":[   "bio_cannon",   "bio_bomb_prox",   "bio_mine"]
+ }],
+ ["Tarthist",{
+  "name":"Tarthist",
+  "img":"ships/skith/Tarthist_54x54.png",
+  "size":[   54,   54],
+  "roll":true,
+  "armor":100,
+  "energy":1700,
+  "rotation_points":64,
+  "radius":23,
+  "weapons":[   "bio_cannon",   "bio_bomb_jam",   "bio_mine"],
+  "thrust":{
+   "timer":220,
+   "file":"thrust2_16x16.png",
+   "delay":75,
+   "offs":[    [     -30,     0]]
+  }
+ }],
+ ["Asp",{
+  "anim":{
+   "file":"ships/terran/Asp_54x54.png",
+   "angle":0},
+  "energy":1700,
+  "radius":23,
+  "slots":[   {
+    "type":"cannon",
+    "offs":[     30,     0]
+   },   {
+    "type":"bomb"
+   },   {
+    "type":"defense",
+    "offs":[     -30,     0]
+   },   {
+    "type":"extra"
+   },   {
+    "type":"extra"
+   },   {
+    "type":"extra"
+   }],
+  "weapons":[   "mass_driver",   "plasma_pulse"],
+  "thrust":{
+   "timer":220,
+   "file":"thrust2_16x16.png",
+   "delay":75,
+   "offs":[    [     -30,     0]]
+  }
+ }],[
+ "Excelsior",{
+  "name":"Excelsior",
+  "img":"ships/terran/Excelsior_54x54.png",
+  "rotation_points":64,
+  "size":[   54,   54],
+  "roll":true,
+  "armor":100,
+  "energy":1700,
+  "radius":23,
+  "slots":[   {
+    "type":"cannon",
+    "offs":[     30,     0]
+   },   {
+    "type":"bomb"
+   },   {
+    "type":"defense",
+    "offs":[     -30,     0]
+   },   {
+    "type":"extra"
+   },   {
+    "type":"extra"
+   },   {
+    "type":"extra"
+   }],
+  "weapons":[   "mass_driver",   "fusion_bomb"],
+  "thrust":{
+   "timer":220,
+   "file":"thrust2_16x16.png",
+   "delay":75,
+   "offs":[    [     -20,     15],    [     -20,     -15]]
+  }
+ }],[
+ "Hornet",{
+  "name":"Hornet",
+  "img":"ships/terran/hornet_54x54.png",
+  "rotation_points":64,
+  "size":[   54,   54],
+  "roll":true,
+  "armor":100,
+  "energy":1700,
+  "radius":23,
+  "slots":[   {
+    "type":"cannon",
+    "offs":[     30,     0]
+   },   {
+    "type":"bomb"
+   },   {
+    "type":"defense",
+    "offs":[     -30,     0]
+   },   {
+    "type":"extra"
+   },   {
+    "type":"extra"
+   },   {
+    "type":"extra"
+   }],
+  "weapons":[   "mass_driver",   "fusion_bomb"],
+  "thrust":{
+   "timer":220,
+   "file":"thrust2_16x16.png",
+   "delay":75,
+   "offs":[    [     -30,     0]]
+  }
+ }],[
+ "Ravager",{
+  "name":"Ravager",
+  "img":"ships/terran/Ravager_54x54.png",
+  "rotation_points":64,
+  "size":[   54,   54],
+  "roll":true,
+  "armor":100,
+  "energy":1700,
+  "radius":23,
+  "slots":[   {
+    "type":"cannon",
+    "offs":[     30,     0]
+   },   {
+    "type":"bomb"
+   },   {
+    "type":"defense",
+    "offs":[     -30,     0]
+   },   {
+    "type":"extra"
+   },   {
+    "type":"extra"
+   },   {
+    "type":"extra"
+   }],
+  "weapons":[   "meson_cannon",   "meson_bomb"],
+  "thrust":{
+   "timer":220,
+   "file":"thrust2_16x16.png",
+   "delay":75,
+   "offs":[    [     -20,     15],    [     -20,     -15]]
+  }
+ }],[
+ "Zag",{
+  "img":"ships/grazi/zaggir_54x54.png",
+  "rotation_points":64,
+  "size":[   54,   54],
+  "roll":true,
+  "armor":100,
+  "energy":1700,
+  "radius":23,
+  "thrust":{
+   "timer":220,
+   "file":"thrust2_16x16.png",
+   "delay":75,
+   "offs":[    [     -30,     0]]
+  }
+ }],
+ ["Rak",{
+  "img":"ships/grazi/rakkir_54x54.png",
+  "rotation_points":64,
+  "size":[   54,   54],
+  "roll":true,
+  "armor":100,
+  "energy":1700,
+  "radius":23,
+  "thrust":{
+   "timer":220,
+   "file":"thrust2_16x16.png",
+   "delay":75,
+   "offs":[    [     -30,     0]]
+  }
+ }],[
+ "Reaver",{
+  "img":"ships/nCloaker_noroll60_54x54.png",
+  "size":[   54,   54],
+  "armor":100,
+  "energy":1700,
+  "name":"Masta",
+  "rotation_points":64,
+  "radius":23,
+  "slots":[   {
+    "type":"cannon",
+    "offs":[     30,     40]
+   },   {
+    "type":"bomb",
+    "offs":[     30,     -40]
+   },   {
+    "type":"defense",
+    "offs":[     30,     40]
+   }],
+  "thrust":{
+   "timer":5,
+   "file":"thrust3_16x16.png",
+   "delay":5,
+   "offs":[    [     -30,     0]]
+  }
+ }],[
+ "A09",{
+  "img":"ships/A09_54x54.png",
+  "rotation_points":64,
+  "size":[   54,   54],
+  "factor":0.4,
+  "roll":true,
+  "armor":100,
+  "energy":1700,
+  "radius":23,
+  "slots":[   {
+    "type":"cannon",
+    "offs":[     30,     0]
+   },   {
+    "type":"bomb"
+   },   {
+    "type":"defense",
+    "offs":[     -30,     0]
+   },   {
+    "type":"extra"
+   },   {
+    "type":"extra"
+   },   {
+    "type":"extra"
+   }],
+  "thrust":{
+   "timer":220,
+   "file":"thrust2_16x16.png",
+   "delay":75,
+   "offs":[    [     -30,     0]]
+  }
+ }],[
+ "Turret0",{
+  "img":"ships/turrets/turret0_61x61.png",
+  "size":[   61,   61],
+  "armor":100,
+  "energy":1700,
+  "name":"Turret0",
+  "scale":1.0,
+  "radius":20,
+  "rotation_points":64,
+  "slots":[   {
+    "type":"weapon",
+    "offs":[     18,     0]
+   }]
+ }],[
+ "EyeBot",{
+  "img":"ships/turrets/eye_144x144.png",
+  "size":[   144,   144],
+  "lock_col":1,
+  "armor":500,
+  "energy":2300,
+  "name":"EyeBot",
+  "scale":1.0,
+  "radius":60,
+  "rotation_points":64,
+  "slots":[   {
+    "type":"weapon",
+    "offs":[     90,     0]
+   }],
+  "weapons":[   "deathbeam"]
+ }],[
+ "DefSat",{
+  "img":"ships/turrets/DefSat_54x54.png",
+  "size":[   54,   54],
+  "armor":75,
+  "energy":1700,
+  "name":"Defensive Satellite",
+  "radius":20,
+  "rotation_points":64,
+  "slots":[   {
+    "type":"weapon",
+    "offs":[     70,     0]
+   }],
+  "weapons":[   "small_laser"]
+ }],[
+ "Base0",{
+  "img":"ships/turrets/repairStationV0_128x128.png",
+  "name":"Base",
+  "size":[   128,   128],
+  "delay":90,
+  "armor":500,
+  "energy":2000,
+  "slots":[]}]
+],
+"objects":[
+ ["Asteroid1", {
+  "physics":{
+   "mass":250,
+   "radius":27},
+  "anim":"asteroids/Rock64c_64x64.png"}],
+ ["Asteroid2", {
+  "physics":{
+   "mass":105,
+   "radius":14},
+  "anim":"asteroids/Rock48a_48x48.png"}]
+],
+"items":[
+ ["Mass Driver", "Projectile", {
+  "bullet":{
+   "anim":"bullets/MassDriver_14x14.png",
+   "alive-time":4000,
+   "initial-velocity":15,
+   "physics":{
+    "mass":30,
+    "radius":1},
+   "damage":{
+    "energy":220,
+    "health":3.1,
+    "asteroid":2},
+   "explode":{
+    "sound":"explode0.wav",
+    "anim":{
+     "file":"bullets/EBulletHit_32x32.png",
+     "delay":5}},
+   "trail":{
+    "anim":{
+     "file":"bullets/bullettrail2_gray_12x12.png",
+     "delay":90},
+    "timer":90,
+    "color":"green"}},
+  "cooldown":22,
+  "cost":150,
+  "fire_sound":"gun5.wav"}],
+ ["Iron", "Ammo", {
+  "anim":"resources/IronOre_32x32.png",
+  "physics":{
+   "mass":10,
+   "radius":10}}],
+ ["itema", "Ammo", {
+  "anim":"resources/ResourceA_26x26.png"}],
+ ["itemb", "Ammo", {
+  "anim":"resources/ResourceB_26x26.png"}]
+],
+"level":{
+ "starfield":[
+  "parallax/star000_512x512.png", 
+  "parallax/star010_512x512.png", 
+  "parallax/star020_512x512.png", 
+  "parallax/star030_512x512.png"
+ ]
+}
+}

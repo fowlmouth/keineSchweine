@@ -1,5 +1,5 @@
 import 
-  sfml, sfml_vector, sfml_colors, chipmunk, os, math, strutils, extra_sht, gl, tables,
+  sfml, sfml_vector, sfml_colors, chipmunk, os, math, strutils, gl, tables,
   input, sg_lobby, sg_gui, sg_assets
 type
   PPlayer* = ref TPlayer
