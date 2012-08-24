@@ -4,7 +4,7 @@ template `&$`(a, b: expr): expr {.immediate.} =
   (a & $b)
 
 template newLenName(): stmt {.immediate.} =
-  let lenName = ^("len"&$lenNames)
+  let lenName {.inject.} = ^("len"&$lenNames)
   inc(lenNames)
 
 macro defPacket*(body: expr): stmt = 
