@@ -1,0 +1,6 @@
+{
+ "name": "Alpha Zone",
+ "desc": "Beta Testing",
+ "port": 2048,
+ "settings": "../zones/alphazone/settings.json"
+}
