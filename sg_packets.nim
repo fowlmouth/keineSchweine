@@ -6,16 +6,19 @@ template idpacket(pktName, id, s2c, c2s: expr): stmt {.immediate.} =
   defPacket(`Sc pktName`, s2c)
   defPacket(`Cs pktName`, c2s)
 
+forwardPacket(Uint8, int8)
+forwardPacket(Uint16, int16)
+
 idPacket(Login, 'a',
   tuple[id: int16],
   tuple[alias: string, passwd: string])
 
 forwardPacket(TPort, int16)
 defPacket(ScZoneRecord, tuple[
-  name: string = "", desc: string = "", players: int16 = 0,
+  name: string = "", desc: string = "",
   ip: string = "", port: TPort = 0.Tport])
 idPacket(ZoneList, 'z',
-  tuple[time: string = "fu", zones: seq[ScZoneRecord]],
+  tuple[network: string = "", zones: seq[ScZoneRecord]],
   tuple[time: string])
 
 let HPoing* = 'p'
@@ -43,4 +46,7 @@ defPacket(ScTeam, tuple[id: int8; name: string = ""])
 defPacket(ScTeamList, tuple[teams: seq[ScTeam]])
 let HTeamChange* = 't'
 
+idPacket(ZoneQuery, 'Q',
+  tuple[playerCount: Uint16], ##i should include a time here or something
+  tuple[pad: char = '\0'])
 

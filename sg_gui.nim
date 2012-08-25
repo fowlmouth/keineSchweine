@@ -5,9 +5,11 @@ import
 type
   PGuiContainer* = ref TGuiContainer
   TGuiContainer* = object of TObject
+    position: TVector2f
     activeEntry: PTextEntry
     widgets: seq[PGuiObject]
     buttons: seq[PButton]
+    renderState*: PRenderStates
   PGuiObject* = ref TGuiObject
   TGuiObject* = object of TObject
   PButton* = ref TButton
@@ -36,6 +38,7 @@ let
 proc newGuiContainer*(): PGuiContainer
 proc free*(container: PGuiContainer)
 proc add*(container: PGuiContainer; widget: PGuiObject)
+proc clearButtons*(container: PGuiContainer)
 proc click*(container: PGuiContainer; position: TVector2f)
 proc setActive*(container: PGuiContainer; entry: PTextEntry)
 
@@ -45,7 +48,7 @@ proc draw*(window: PRenderWindow; container: PGuiContainer) {.inline.}
 proc newMessageArea*(container: PGuiContainer; position: TVector2f): PMessageArea {.discardable.}
 proc add*(m: PMessageArea; text: string): PText {.discardable.}
 
-proc draw*(window: PRenderWindow; b: PButton) {.inline.}
+proc draw*(window: PRenderWindow; b: PButton; rs: PRenderStates) {.inline.}
 proc click*(b: PButton; p: TVector2f)
 proc setPosition*(b: PButton; p: TVector2f)
 proc setString*(b: PButton; s: string) {.inline.}
@@ -59,6 +62,7 @@ proc enable*(b: PButton)
 proc newTextEntry*(container: PGuiContainer; text: string;
                     position: TVector2f): PTextEntry {.discardable.}
 proc init(t: PTextEntry; text: string)
+proc draw*(window: PRenderWindow, t: PTextEntry) {.inline.}
 proc setActive*(t: PTextEntry) {.inline.}
 proc getText*(t: PTextEntry): string {.inline.}
 
@@ -74,24 +78,32 @@ proc newGuiContainer*(): PGuiContainer =
   new(result, free)
   result.widgets = @[]
   result.buttons = @[]
-proc free*(container: PGuiContainer) = nil
+  result.renderState = cast[PRenderStates](alloc0(sizeof(TRenderStates)))
+  result.renderState.transform = identityMatrix ##transformFromMatrix(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+proc free*(container: PGuiContainer) = 
+  dealloc(container.renderState)
 proc add*(container: PGuiContainer; widget: PGuiObject) =
   container.widgets.add(widget)
 proc add*(container: PGuiContainer; button: PButton) =
   container.buttons.add(button)
+proc clearButtons*(container: PGuiContainer) =
+  container.buttons.setLen 0
 proc click*(container: PGuiContainer; position: TVector2f) =
   for b in container.buttons:
     click(b, position)
 proc setActive*(container: PGuiContainer; entry: PTextEntry) =
   container.activeEntry = entry
   setActive(entry)
+proc setPosition*(container: PGuiContainer; position: TVector2f) =
+  container.position = position
+
 
 proc update*(container: PGuiContainer; dt: float) =
   if not container.activeEntry.isNil:
     container.activeEntry.setString(container.activeEntry.getText())
 proc draw*(window: PRenderWindow; container: PGuiContainer) =
   for b in container.buttons:
-    window.draw(b)
+    window.draw(b, container.renderState)
 
 proc free(c: PButton) =
   c.bg.destroy()
@@ -103,7 +115,7 @@ proc newButton*(container: PGuiContainer; text: string;
                  position: TVector2f; onClick: TButtonClicked;
                  startEnabled: bool = true): PButton =
   new(result, free)
-  init(result, text, position, onClick)
+  init(result, text, position + container.position, onClick)
   if not startEnabled: disable(result)
   container.add result
 proc init(b: PButton; text: string; position: TVector2f; onClick: TButtonClicked) =
@@ -127,9 +139,9 @@ proc enable*(b: PButton) =
 proc disable*(b: PButton) =
   b.enabled = false
   b.text.setColor(Gray)
-proc draw*(window: PRenderWindow; b: PButton) =
-  window.draw(b.bg)
-  window.draw(b.text)
+proc draw*(window: PRenderWindow; b: PButton; rs: PRenderStates) =
+  window.draw(b.bg, rs)
+  window.draw(b.text, rs)
 proc setPosition*(b: PButton, p: TVector2f) =
   b.bg.setPosition(p)
   b.text.setPosition(p)
@@ -145,12 +157,13 @@ proc free(obj: PTextEntry) =
 proc newTextEntry*(container: PGuiContainer; text: string; 
                     position: TVector2F): PTextEntry =
   new(result, free)
-  init(PButton(result), text, position, proc(b: PButton) = setActive(PTextEntry(b)))
+  init(PButton(result), text, position + container.position, proc(b: PButton) = setActive(PTextEntry(b)))
   init(result, text)
   container.add result
 proc init(t: PTextEntry, text: string) =
   t.inputClient = newTextInput(text, text.len)
-
+proc draw(window: PRenderWindow; t: PTextEntry) =
+  draw(window, PButton(t), nil)
 proc getText*(t: PTextEntry): string =
   return t.inputClient.text
 proc setActive*(t: PTextEntry) =

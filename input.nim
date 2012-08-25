@@ -125,9 +125,7 @@ iterator filterEvents*(window: PRenderWindow): PEvent =
     of EvtKeyReleased: addKeyEvent(event.key.code, up)
     of EvtMouseButtonPressed: addButtonEvent(event.mouseButton.button, down)
     of EvtMouseButtonReleased: addButtonEvent(event.mouseButton.button, up)
-    of EvtTextEntered: 
-      echo("Should record text...")
-      recordText(activeInput, event.text)
+    of EvtTextEntered: recordText(activeInput, event.text)
     of EvtMouseMoved: setMousePos(event.mouseMove.x, event.mouseMove.y)
     else: yield(addr event)
 # Handle and return input-related events

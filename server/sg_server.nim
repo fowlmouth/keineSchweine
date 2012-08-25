@@ -29,7 +29,7 @@ proc newClient*(addy: TAddress): PClient =
   result.outputBuf = newStringStream("")
   result.outputBuf.flushImpl = proc(stream: PStream) =
     var s = PStringStream(stream)
-    s.setPosition 1
+    s.setPosition 0
     s.data.setLen 0
   clients[addy] = result
   allClients.add(result)
@@ -41,16 +41,16 @@ proc findClient*(host: string; port: int16): PClient =
 proc send*(client: PClient; msg: string): int {.discardable.} =
   result = server.sendTo(client.addy.host, client.addy.port.TPort, msg)
 proc send*[T](client: PClient; pktType: char; pkt: var T) =
-  echo(">> ", client, " ", pktType)
-  discard """var t: char
-  shallowcopy(t, pkttype)
-  client.outputBuf.writeData(addr(t), 1)"""
+  #echo(">> ", client, " ", pktType)
+  #echo(client.outputBuf.getPosition())
   client.outputBuf.write(pktType)
   pkt.pack(client.outputBuf)
-  echo("output buf is now ", repr(client.outputBuf))
+  #echo("output buf is now ", repr(client.outputBuf))
 proc setAlias(client: PClient; newName: string): bool =
   if alias2client.hasKey(newName):
     return
+  if alias2client.hasKey(client.alias):
+    alias2client.del(client.alias)
   client.alias = newName
   alias2client[newName] = client
   result = true
@@ -71,11 +71,13 @@ proc sendChat(client: PClient; kind: ChatType; txt: string) =
   echo(">> chat ", client)
   var m = newScChat(kind, "", txt)
   client.send(HChat, m)
+proc sendError(client: PClient; txt: string) {.inline.} =
+  sendChat(client, CError, txt)
 
 var pubChatQueue = newStringStream("")
 pubChatQueue.flushImpl = proc(stream: PStream) =
+  stream.setPosition(0)
   PStringStream(stream).data.setLen(0)
-  stream.setPosition(1)
 proc queuePub(sender: string, msg: CsChat) =
   var chat = newScChat(kind = CPub, fromPlayer = sender, text = msg.text)
   pubChatQueue.write(HChat)
@@ -91,26 +93,30 @@ handlers[HLogin] = proc(client: PClient; stream: PStream) =
   var loginInfo = readCsLogin(stream)
   echo("** login: alias = ", loginInfo.alias)
   if client.auth:
-    client.sendChat(CError, "You are already logged in.")
+    client.sendError("You are already logged in.")
   else:
     if client.setAlias(loginInfo.alias):
       client.auth = true
-      client.sendMessage("Welcome "& client.alias &", please have a seat over there.")
+      client.sendMessage("Welcome "& client.alias)
+      client.sendZonelist()
+    else:
+      client.sendError("Invalid alias")
 handlers[HZoneList] = proc(client: PClient; stream: PStream) =
   var pinfo = readCsZoneList(stream)
   echo("** zonelist req")
 handlers[HChat] = proc(client: PClient; stream: PStream) =
   var chat = readCsChat(stream)
   if not client.auth:
-    client.sendChat(CError, "You are not logged in.")
+    client.sendError("You are not logged in.")
     return
-  echo("** chat")
-  echo("<", client.alias, " to ", chat.target, "> ", chat.text)
   if chat.target != "": ##private
     if alias2client.hasKey(chat.target):
       alias2client[chat.target].forwardPrivate(client, chat.text)
   else:
     queuePub(client.alias, chat)
+handlers[HQuery] = proc(client: PClient; stream: PStream)
+  var q = readCsQuery(stream)
+  
 
 proc handlePkt(s: PClient; stream: PStream) =
   while not stream.atEnd:  

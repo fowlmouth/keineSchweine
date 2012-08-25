@@ -5,6 +5,7 @@ import
   streams_enh, input, sg_packets, sg_assets, sg_gui
 var
   gui = newGuiContainer()
+  zonelist = newGuiContainer()
   u_alias, u_passwd: PTextEntry
   activeInput = 0
   aliasText, passwdText: PText
@@ -13,6 +14,7 @@ var
   loginBtn: PButton
   playBtn: PButton
   keyClient = newKeyClient("lobby")
+  showZonelist = false
 var
   client: TSocket
   bConnected = false
@@ -23,59 +25,66 @@ var
 template dispmessage(m: expr): stmt = 
   messageArea.add(m)
 
+## TODO turn this into sockstream 
+incoming.data.setLen 1024
+incoming.data.setLen 0
+outgoing.data.setLen 1024
+outgoing.data.setLen 0
 outgoing.flushImpl = proc(stream: PStream) =
+  if stream.getPosition() == 0: return
   var s = PStringStream(stream)
-  if s.getPosition == 0: return
-  echo("Flushing outgoing")
   discard client.sendAsync(s.data)
+  s.setPosition(0)
   s.data.setLen(0)
-  s.setPosition(1)
 incoming.flushImpl = proc(stream: PStream) =
-  echo("Flushing incoming")
-  var s = PStringStream(stream)
-  s.data.setLen(0)
-  s.setPosition(1)
+  #echo("Flushing incoming")
+  stream.setPosition(0)
+  PStringStream(stream).data.setLen(0)
 
 proc writePkt[T](pid: PacketID, p: var T) =
-  echo("!! writePKT ", pid)
   outgoing.write(pid)
   p.pack(outgoing)
 
 proc zoneListReq() =
-  #if not bConnected: return
-  var pkt: ScZonelist
-  pkt.time  = "Sup"
-  writePkt HLogin, pkt
-  
+  var pkt = newCsZonelist("sup")
+  writePkt HZonelist, pkt
 
 ##key handlers
-keyClient.registerHandler(KeyO, down, (proc() = 
-  if keyPressed(KeyRShift): echo(repr(outgoing))))
-keyClient.registerHandler(KeyTab, down, (proc() =
-  activeInput = (activeInput + 1) mod 2))
+keyClient.registerHandler(KeyM, down, proc() = 
+  echo(repr(gui.renderState), "\n--------"))
+keyClient.registerHandler(MouseMiddle, down, proc() = 
+  gui.setPosition(getMousePos()))
+
+keyClient.registerHandler(KeyO, down, proc() = 
+  if keyPressed(KeyRShift): echo(repr(outgoing)))
+keyClient.registerHandler(KeyTab, down, proc() =
+  activeInput = (activeInput + 1) mod 2) #does this work?
 keyClient.registerHandler(MouseLeft, down, proc() = 
   let p = getMousePos()
-  gui.click(p))
-keyClient.registerHandler(KeyL, down, (proc() =
-  zonelistreq()))
+  gui.click(p)
+  if showZonelist: zonelist.click(p))
 var mptext = newText("", guiFont, 16)
-keyClient.registerHandler(MouseRight, down, (proc() = 
+keyClient.registerHandler(MouseRight, down, proc() = 
   let p = getMousePos()
   mptext.setPosition(p)
-  mptext.setString("($1,$2)"%[$p.x.int,$p.y.int])
-) )
+  mptext.setString("($1,$2)"%[$p.x.int,$p.y.int]))
 
 proc dispChat(kind: ChatType, text: string, fromPlayer: string = "") = 
   var m = messageArea.add(
     if fromPlayer == "": text
     else: "<$1> $2" % [fromPlayer, text])
   case kind
-  of CPub: m.setColor(Blue)
+  of CPub: m.setColor(RoyalBlue)
   of CSystem: m.setColor(Green)
   else: m.setColor(Red)
 proc dispChat(msg: ScChat) {.inline.} =
   dispChat(msg.kind, msg.text, msg.fromPlayer)
 
+proc setActiveZone(ind: int; zone: ScZoneRecord) =
+  #hilight it or something
+  dispmessage("Selected " & zone.name)
+  
+  
 proc setConnected(state: bool) =
   if state:
     bConnected = true
@@ -93,10 +102,26 @@ incomingHandlers[HLogin] = proc(s: PStream) =
   var info = readScLogin(s)
   dispmessage("We logged in :>")
 incomingHandlers[HZonelist] = proc(s: PStream) =
-  var info = readScZonelist(s)
-  for z in info.zones:
-    dispChat(CSystem, z.name)
-    echo(z.name)
+  var 
+    info = readScZonelist(s)
+    zones = info.zones
+  if zones.len > 0:
+    zonelist.clearButtons()
+    var pos = vec2f(0.0, 0.0)
+    zonelist.newButton(
+      text = "Zonelist - "& info.network,
+      position = pos,
+      onClick = proc(b: PButton) =
+        dispmessage("Click on header"))
+    pos.y += 20
+    for i in 0..zones.len - 1:
+      var z = zones[i]
+      zonelist.newButton(
+        text = z.name, position = pos,
+        onClick = proc(b: PButton) = 
+          setActiveZone(i, z))
+      pos.y += 20
+    showZonelist = true
 incomingHandlers[HPoing] = proc(s: PStream) = 
   var ping = readPoing(s)
   dispmessage("Ping: "& $ping.time)
@@ -145,8 +170,6 @@ proc poll(timeout: int): bool =
     if res > 0:
       incoming.data.setLen(res)
       handlePkts(incoming)
-    else:
-      echo("NO Data?")
     incoming.flush()
   if selectWrite(ws, timeout).bool:
     outgoing.flush()
@@ -181,6 +204,7 @@ proc playOffline(b: PButton) =
     for e in errors: dispmessage(e)
 
 proc lobbyInit*() =
+  zonelist.setPosition(vec2f(200.0, 100.0))
   connectionButtons = @[]
   u_alias = gui.newTextEntry("fizz", vec2f(10.0, 10.0))
   u_passwd = gui.newTextEntry("buzz", vec2f(10.0, 30.0))
@@ -189,11 +213,11 @@ proc lobbyInit*() =
     position = vec2f(10.0, 50.0),
     onClick = tryLogin,
     startEnabled = false))
-  connectionButtons.add(gui.newButton(
+  playBtn = gui.newButton(
     text = "Play",
     position = vec2f(680.0, 8.0),
     onClick = tryTransition,
-    startEnabled = false))
+    startEnabled = false)
   gui.newButton(
     text = "Play Offline",
     position = vec2f(680.0, 28.0),
@@ -229,8 +253,7 @@ proc lobbyUpdate*(dt: float) =
 proc lobbyDraw*(window: PRenderWindow) =
   window.clear(Black)
   window.draw messageArea
-  window.draw u_alias
-  window.draw u_passwd
   window.draw mptext
   window.draw gui
+  if showZonelist: window.draw zonelist
   window.display()

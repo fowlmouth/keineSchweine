@@ -18,6 +18,13 @@ type
   ## position*: TVector2f
   ## velocity*: TVector2f
   ## angle*:    float
+  PGameObject = ref TGameObject
+  TGameObject = object
+    body: chipmunk.PBody
+    shape: chipmunk.PShape
+    record*: PObjectRecord
+    sprite: PSprite
+    texture: PTexture
 const
   TAU = PI * 2.0
   TenDegrees = 10.0 * PI / 180.0
@@ -43,6 +50,7 @@ var
   worldView, guiView: PView
   space = newSpace()
   ingameClient, specInputClient: PKeyClient
+  stars: seq[PSpriteSheet] = @[]
 
 window = newRenderWindow(VideoMode(800, 600, 32), "sup", sfDefaultStyle)
 lobbyInit()
@@ -50,12 +58,25 @@ lobbyInit()
 proc newNameTag*(text: string): PText =
   result = newText()
   result.setFont(guiFont)
-  result.setCharacterSize(24)
+  result.setCharacterSize(14)
   result.setColor(Red)
   result.setString(text)
 
 var debugText = newNameTag("Loading...")
 debugText.setPosition(vec2f(0.0, 600.0 - 50.0))
+
+proc initLevel() =
+  loadAllGraphics()
+  let levelSettings = getLevelSettings()
+  if levelSettings.starfield.len > 0:
+    showStars = true
+    var rect: TIntRect
+    rect.width = levelSettings.size.x
+    rect.height= levelSettings.size.y
+    for sprite in levelSettings.starfield:
+      sprite.tex.setRepeated(true)
+      sprite.sprite.setTextureRect(rect)
+      stars.add(sprite)
 
 when defined(showFPS):
   var fpsText = newNameTag("0")
@@ -111,6 +132,8 @@ proc newVehicle*(veh: string): PVehicle =
   echo(repr(result.record.physics))
   echo($result.body.getMass.round, " | ", $result.body.getMoment())
   echo($result.shape.getCircleRadius(), " | ", $result.shape.getCircleOffset())
+
+
 
 proc createBot() =
   if localBots.len < MaxLocalBots:
@@ -215,9 +238,19 @@ proc cp2sfml(a: TVector): TVector2f {.inline.} =
   result.x = a.x
   result.y = a.y
 
-#type
-#  PCheapObject* = ref object
-#var lobbyObjects = seq[PCheapObject] = @[]
+
+proc free(obj: PGameObject) =
+  if not obj.sprite.isNil: destroy(obj.sprite)
+  obj.record = nil
+proc newObject*(name: string): PGameObject =
+  let record = fetchObj(name)
+  if record.isNil: return nil
+  new(result, free)
+  result.record = record
+  result.sprite = record.anim.spriteSheet.sprite.copy()
+proc draw(window: PRenderWindow, obj: PGameObject) {.inline.} =
+  window.draw(obj.sprite)
+
 
 proc update*(obj: PVehicle) =
   obj.sprite.setPosition(obj.body.getPos.cp2sfml)
@@ -292,40 +325,11 @@ proc loadTexture(filename: string): PTexture =
   result = newTexture(image)
   image.destroy()
 
-type 
-  PGameObject = ref TGameObject
-  TGameObject = object
-    sprite: PSprite
-    texture: PTexture
-proc free(obj: PGameObject) =
-  destroy(obj.sprite)
-  destroy(obj.texture)
-proc lameObj(filename: string): PGameObject =
-  new(result, free)
-  result.texture = loadTexture(filename)
-  result.sprite = newSprite()
-  result.sprite.setTexture(result.texture, true)
-proc draw(window: PRenderWindow, obj: PGameObject) {.inline.} =
-  window.draw(obj.sprite)
 proc draw(window: PRenderWindow, player: PPlayer) {.inline.} =
   if not player.spectator: 
     if player.vehicle != nil:
       window.draw(player.vehicle.sprite)
     window.draw(player.nameTag)
-
-var stars: seq[PGameObject] = @[]
-var rect: TIntRect
-rect.width  = 1024 * 4
-rect.height = 1024 * 4
-for i in 0..3:
-  var s = lameObj("data/gfx/parallax/star0"& $i &"0_512x512.png")
-  s.texture.setRepeated(true)
-  # s.texture.bindGl()
-  # glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
-  # glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-  s.sprite.setTextureRect(rect)
-  stars.add(s)
-showStars = true
 
 proc render(obj: PVehicle) =
   window.draw(obj.sprite)
@@ -334,7 +338,7 @@ proc render() =
   window.setView(worldView)
   if showStars:
     for star in stars:
-      window.draw(star)
+      window.draw(star.sprite)
   window.draw(localPlayer)
   for b in localBots:
     window.draw(b)
@@ -376,7 +380,7 @@ while gameRunning:
     lobbyUpdate(dt)
     lobbyDraw(window)
   else:
-    loadAllGraphics()
+    initLevel()
     echo("Done? lol")
     doneWithSaidTransition()
     readyMainState()

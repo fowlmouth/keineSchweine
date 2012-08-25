@@ -10,7 +10,8 @@ type
     levelSettings: PLevelSettings
   PLevelSettings* = ref TLevelSettings
   TLevelSettings* = object
-    size: TVector2i
+    size*: TVector2i
+    starfield*: seq[PSpriteSheet]
   PVehicleRecord* = ref TVehicleRecord
   TVehicleRecord* = object
     id*: int16
@@ -48,7 +49,7 @@ type
     framew*,frameh*: int
     rows*, cols*: int
     sprite*: PSprite
-    tex: PTexture
+    tex*: PTexture
   TGameState* = enum
     Lobby, Transitioning, Field
 var 
@@ -56,6 +57,7 @@ var
   SpriteSheets = initTable[string, PSpriteSheet](64)
   nameToVehID*: TTable[string, int]
   nameToItemID*: TTable[string, int]
+  nameToObjID*: TTable[string, int]
   activeState = Lobby
 proc newSprite*(filename: string): PSpriteSheet
 proc load*(ss: PSpriteSheet): bool {.discardable.}
@@ -63,6 +65,7 @@ proc validateSettings*(settings: PJsonNode; errors: var seq[string]): bool
 proc loadSettings*(rawJson: string, errors: var seq[string]): bool
 proc loadSettingsFromFile*(filename: string, errors: var seq[string]): bool
 
+proc importLevel(data: PJsonNode): PLevelSettings
 proc importVeh(data: PJsonNode): PVehicleRecord
 proc importObject(data: PJsonNode): PObjectRecord
 proc importItem(data: PJsonNode): PItemRecord
@@ -91,6 +94,8 @@ proc loadAllGraphics*() =
     if load(ss):
       inc(l)
   echo("Loaded ",l," sprites")
+proc getLevelSettings*(): PLevelSettings =
+  result = cfg.levelSettings
 
 proc newSprite*(filename: string): PSpriteSheet =
   if hasKey(SpriteSheets, filename):
@@ -145,11 +150,13 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
     free(cfg)
     cfg = nil
   new(cfg, free)
+  cfg.levelSettings = importLevel(settings)
   cfg.vehicles = @[]
   cfg.items = @[]
   cfg.objects = @[]
   nameToVehID = initTable[string, int](32)
   nameToItemID = initTable[string, int](32)
+  nameToObjID = initTable[string, int](32)
   var 
     vID = 0'i16
     itmID = 0'i16
@@ -170,10 +177,9 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
     inc(vID)
     o.id = vID
     cfg.objects.add o
-    
+    nameToObjID[o.name] = o.id
   result = true
 
-    
 
 proc load*(ss: PSpriteSheet): bool =
   if not ss.sprite.isNil: 
@@ -199,6 +205,8 @@ proc fetchVeh*(name: string): PVehicleRecord =
   return cfg.vehicles[nameToVehID[name]]
 proc fetchItm*(itm: string): PItemRecord =
   return cfg.items[nameToItemID[itm]]
+proc fetchObj*(name: string): PObjectRecord =
+  return cfg.objects[nameToObjID[name]]
 
 proc getField(node: PJsonNode, field: string, target: var float) =
   if not node.existsKey(field):
@@ -209,6 +217,18 @@ proc getField(node: PJsonNode, field: string, target: var int) =
     return
   target = node[field].num.int
 
+proc importLevel(data: PJsonNode): PLevelSettings =
+  new(result)
+  result.size = vec2i(5000, 5000)
+  result.starfield = @[]
+  if not data.existsKey("level"): return
+  var level = data["level"]
+  if level.existsKey("size") and level["size"].kind == JArray and level["size"].len == 2:
+    result.size.x = level["size"][0].num.cint
+    result.size.y = level["size"][1].num.cint
+  if level.existsKey("starfield"):
+    for star in level["starfield"].items:
+      result.starfield.add(newSprite(star.str))
 proc importPhys(data: PJsonNode): TPhysicsRecord =
   result.radius = 20.0
   result.mass = 10.0
