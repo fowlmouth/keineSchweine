@@ -1,20 +1,26 @@
 
 import
-  sockets, streams, tables, times, math, strutils,
+  sockets, streams, tables, times, math, strutils, json,
   sfml, sfml_vector, sfml_colors, 
   streams_enh, input, sg_packets, sg_assets, sg_gui
+type
+  TClientSettings = object
+    offlineFile: string
+    dirserver: tuple[host: string, port: TPort]
 var
+  clientSettings: TClientSettings
   gui = newGuiContainer()
   zonelist = newGuiContainer()
   u_alias, u_passwd: PTextEntry
   activeInput = 0
   aliasText, passwdText: PText
-  messageArea: PMessageArea
   fpsTimer: PButton
   loginBtn: PButton
   playBtn: PButton
   keyClient = newKeyClient("lobby")
   showZonelist = false
+  chatInput*: PTextEntry
+  messageArea*: PMessageArea
 var
   client: TSocket
   bConnected = false
@@ -45,6 +51,9 @@ proc writePkt[T](pid: PacketID, p: var T) =
   outgoing.write(pid)
   p.pack(outgoing)
 
+proc sendChat*(text: string) =
+  var pkt = newCsChat(text = text)
+  writePkt HChat, pkt
 proc zoneListReq() =
   var pkt = newCsZonelist("sup")
   writePkt HZonelist, pkt
@@ -181,7 +190,7 @@ proc lobbyReady*() =
 
 proc tryConnect*(b: PButton) =
   echo("Connecting...")
-  connect("localhost", 2048.TPort)
+  connect(clientSettings.dirserver.host, clientSettings.dirserver.port)
 proc tryLogin*(b: PButton) =
   var login = newCsLogin(
     alias = u_alias.getText(),
@@ -197,16 +206,25 @@ proc tryTransition*(b: PButton) =
     for e in errors: dispmessage(e)
 proc playOffline(b: PButton) =
   var errors: seq[string] = @[]
-  if loadSettingsFromFile("zones/alphazone/settings.json", errors):
+  if loadSettingsFromFile("zones/"& clientSettings.offlineFile, errors):
     transition()
   else:
     dispmessage("Errors reading the file:")
     for e in errors: dispmessage(e)
 
 proc lobbyInit*() =
+  var s = json.parseFile("./client_settings.json")
+  clientSettings.offlineFile = "zones/"
+  clientSettings.offlineFile.add s["default-file"].str
+  let dirserv = s["directory-server"]
+  clientSettings.dirserver.host = dirserv["host"].str
+  clientSettings.dirserver.port = dirserv["port"].num.TPort
+  
   zonelist.setPosition(vec2f(200.0, 100.0))
   connectionButtons = @[]
-  u_alias = gui.newTextEntry("fizz", vec2f(10.0, 10.0))
+  u_alias = gui.newTextEntry(
+    if s.existsKey("alias"): s["alias"].str else: "alias", 
+    vec2f(10.0, 10.0))
   u_passwd = gui.newTextEntry("buzz", vec2f(10.0, 30.0))
   connectionButtons.add(gui.newButton(
     text = "Login", 
@@ -237,7 +255,10 @@ proc lobbyInit*() =
       var pkt = newCsChat(text = "ohai")
       writePkt HChat, pkt),
     startEnabled = false))
-  messageArea = gui.newMessageArea(vec2f(10.0, 575.0))
+  chatInput = gui.newTextEntry("...", vec2f(10.0, 575.0), proc() =
+    sendChat(chatInput.getText())
+    chatInput.clearText())
+  messageArea = gui.newMessageArea(vec2f(10.0, 575.0 - 20.0))
 
 var i = 0
 proc lobbyUpdate*(dt: float) = 

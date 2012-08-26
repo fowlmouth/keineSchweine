@@ -1,6 +1,6 @@
 import
   sockets, times, streams, streams_enh, tables, json, os,
-  sg_packets, sg_assets, sfml
+  sg_packets, sg_assets, sfml, md5
 type
   TServer = object
   THandler = proc(client: PCLient; stream: PStream)
@@ -15,12 +15,13 @@ var
   server: TSocket
   handlers = initTable[char, THandler](16)
   thisZone = newScZoneRecord("local", "sup")
+  zoneList = newScZoneList()
   thisZoneSettings: string
-  zoneList = newScZoneList(zones = @[thisZone])
   ## I was high.
   clients = initTable[TAddress, PClient](16)
   alias2client = initTable[string, PClient](32)
   allClients: seq[PClient] = @[] 
+  zonePlayers: seq[PClient] = @[] 
 
 proc newClient*(addy: TAddress): PClient =
   new(result)
@@ -114,9 +115,11 @@ handlers[HChat] = proc(client: PClient; stream: PStream) =
       alias2client[chat.target].forwardPrivate(client, chat.text)
   else:
     queuePub(client.alias, chat)
-handlers[HQuery] = proc(client: PClient; stream: PStream)
-  var q = readCsQuery(stream)
-  
+handlers[HZoneQuery] = proc(client: PClient; stream: PStream) =
+  echo("Got zone query")
+  var q = readCsZoneQuery(stream)
+  var resp = newScZoneQuery(zonePlayers.len.uint16)
+  client.send(HZoneQuery, resp)
 
 proc handlePkt(s: PClient; stream: PStream) =
   while not stream.atEnd:  
@@ -166,8 +169,9 @@ proc poll*(timeout: int = 250) =
       let res = server.sendTo(c.addy.host, c.addy.port.TPort, c.outputBuf.data)
       echo("Write ", c, " result: ", res, " data: ", c.outputBuf.data)
       c.outputBuf.flush()
+
 when isMainModule:
-  import parseopt, matchers
+  import parseopt, matchers, strutils
   var zoneCfgFile = "./server_settings.json"
   for kind, key, val in getOpt():
     case kind
@@ -200,6 +204,10 @@ when isMainModule:
   thisZone.desc = jsonSettings["desc"].str
   thisZone.ip = "localhost"
   thisZone.port = port
+  zoneList.zones.add(thisZone)
+  echo("Zone list:")
+  for z in zonelist.zones.pairs:
+    echo("$1 - $2 @ $3:$4" %[z.name, z.desc, z.ip, $z.port])
   createServer(port)
   echo("Listening on port ", port, "...")
   var pubChatTimer = newClock()

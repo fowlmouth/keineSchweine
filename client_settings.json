@@ -1,0 +1,8 @@
+{
+ "default-file": "alphazone.json",
+ "alias": "foo",
+ "directory-server":{
+  "host":"localhost",
+  "port":2048
+ }
+}

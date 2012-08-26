@@ -8,12 +8,12 @@ template idpacket(pktName, id, s2c, c2s: expr): stmt {.immediate.} =
 
 forwardPacket(Uint8, int8)
 forwardPacket(Uint16, int16)
+forwardPacket(TPort, int16)
 
 idPacket(Login, 'a',
   tuple[id: int16],
   tuple[alias: string, passwd: string])
 
-forwardPacket(TPort, int16)
 defPacket(ScZoneRecord, tuple[
   name: string = "", desc: string = "",
   ip: string = "", port: TPort = 0.Tport])
@@ -24,9 +24,8 @@ idPacket(ZoneList, 'z',
 let HPoing* = 'p'
 defPacket(Poing, tuple[id: int32, time: float32])
 
-type
-  ChatType* = enum
-    CPub = 0'i8, CPriv, CSystem, CError
+type ChatType* = enum
+  CPub = 0'i8, CPriv, CSystem, CError
 forwardPacket(ChatType, int8)
 
 idPacket(Chat, 'C', 
@@ -49,4 +48,13 @@ let HTeamChange* = 't'
 idPacket(ZoneQuery, 'Q',
   tuple[playerCount: Uint16], ##i should include a time here or something
   tuple[pad: char = '\0'])
+
+type SpawnKind = enum
+  SpawnItem = 1'i8, SpawnVehicle, SpawnObject
+forwardPacket(SpawnKind, int8)
+defPacket(ScSpawn, tuple[
+  kind: SpawnKind; id: uint16; record: uint16; amount: uint16])
+
+let HZoneLogin = 'u'
+defPacket(SdZoneLogin, tuple[name: string; desc: string; port: TPort; key: string])
 
