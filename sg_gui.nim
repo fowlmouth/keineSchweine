@@ -60,10 +60,11 @@ proc disable*(b: PButton)
 proc enable*(b: PButton)
 
 proc newTextEntry*(container: PGuiContainer; text: string;
-                    position: TVector2f): PTextEntry {.discardable.}
-proc init(t: PTextEntry; text: string)
+                    position: TVector2f; onEnter: TInputFinishedProc = nil): PTextEntry {.discardable.}
+proc init(t: PTextEntry; text: string; onEnter: TInputFinishedProc)
 proc draw*(window: PRenderWindow, t: PTextEntry) {.inline.}
 proc setActive*(t: PTextEntry) {.inline.}
+proc clearText*(t: PTextEntry) {.inline.}
 proc getText*(t: PTextEntry): string {.inline.}
 
 template containerWrapper(procname: expr; args: expr): stmt {.immediate.} =
@@ -155,15 +156,18 @@ proc click*(b: PButton, p: TVector2f) =
 proc free(obj: PTextEntry) =
   free(PButton(obj))
 proc newTextEntry*(container: PGuiContainer; text: string; 
-                    position: TVector2F): PTextEntry =
+                    position: TVector2F; onEnter: TInputFinishedProc = nil): PTextEntry =
   new(result, free)
-  init(PButton(result), text, position + container.position, proc(b: PButton) = setActive(PTextEntry(b)))
-  init(result, text)
+  init(PButton(result), text, position + container.position, proc(b: PButton) =
+    setActive(container, PTextEntry(b)))
+  init(result, text, onEnter)
   container.add result
-proc init(t: PTextEntry, text: string) =
-  t.inputClient = newTextInput(text, text.len)
+proc init(t: PTextEntry; text: string; onEnter: TInputFinishedProc) =
+  t.inputClient = newTextInput(text, text.len, onEnter)
 proc draw(window: PRenderWindow; t: PTextEntry) =
   draw(window, PButton(t), nil)
+proc clearText*(t: PTextEntry) =
+  t.inputClient.clear()
 proc getText*(t: PTextEntry): string =
   return t.inputClient.text
 proc setActive*(t: PTextEntry) =

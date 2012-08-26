@@ -4,6 +4,7 @@ import
 type
   PPlayer* = ref TPlayer
   TPlayer* = object
+    id: uint16
     vehicle: PVehicle
     spectator: bool
     alias: string
@@ -24,7 +25,6 @@ type
     shape: chipmunk.PShape
     record*: PObjectRecord
     sprite: PSprite
-    texture: PTexture
 const
   TAU = PI * 2.0
   TenDegrees = 10.0 * PI / 180.0
@@ -41,6 +41,7 @@ var
   localBots: seq[PPlayer] = @[]
   activeVehicle: PVehicle
   myVehicles: seq[PVehicle] = @[]
+  objects: seq[PGameObject] = @[]
   #objects: seq[PGameObject] = @[]
   gameRunning = true
   frameRate = newClock()
@@ -106,6 +107,7 @@ proc free*(veh: PVehicle) =
   veh.sprite = nil
   veh.body   = nil
   veh.shape  = nil
+
 proc newVehicle*(veh: string): PVehicle =
   var v = fetchVeh(veh)
   if not v.playable:
@@ -248,6 +250,12 @@ proc newObject*(name: string): PGameObject =
   new(result, free)
   result.record = record
   result.sprite = record.anim.spriteSheet.sprite.copy()
+  result.body = space.addBody(newBody(result.record.physics.mass, 10.0))
+  result.shape = space.addShape(
+    chipmunk.newCircleShape(result.body, result.record.physics.radius, vectorZero))
+proc addObject*(name: string) =
+  var o = newObject(name)
+  if not o.isNil: objects.add(o)
 proc draw(window: PRenderWindow, obj: PGameObject) {.inline.} =
   window.draw(obj.sprite)
 
@@ -278,6 +286,12 @@ var specCameraSpeed = 5.0
 specInputClient.registerHandler(KeyF11, down, proc() = toggleSpec())
 specInputClient.registerHandler(KeyLShift, down, proc() = specCameraSpeed *= 2)
 specInputClient.registerHandler(KeyLShift, up, proc() = specCameraSpeed /= 2)
+
+specInputClient.registerHandler(KeyP, down, proc() =
+  echo("addObject(solar mold)")
+  var objr = fetchObj("Solar Mold")
+  echo(repr(objr))
+  addObject("Solar Mold"))
 
 proc update(dt: float) =
   if localPlayer.spectator:
@@ -342,6 +356,8 @@ proc render() =
   window.draw(localPlayer)
   for b in localBots:
     window.draw(b)
+  for o in objects:
+    window.draw(o)
   window.setView(guiView)
   window.draw(inputText)
   window.draw(inputCursor)

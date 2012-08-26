@@ -159,25 +159,26 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
   nameToObjID = initTable[string, int](32)
   var 
     vID = 0'i16
-    itmID = 0'i16
   for vehicle in settings["vehicles"].items:
     var veh = importVeh(vehicle)
-    inc(vID)
     veh.id = vID
     cfg.vehicles.add veh
     nameToVehID[veh.name] = veh.id
+    inc vID
+  vID = 0
   for item in settings["items"].items:
     var itm = importItem(item)
-    inc(itmID)
-    itm.id = itmID
+    itm.id = vID
     cfg.items.add itm
     nameToItemID[itm.name] = itm.id
+    inc vID
+  vID = 0
   for obj in settings["objects"].items:
     var o = importObject(obj)
-    inc(vID)
     o.id = vID
     cfg.objects.add o
     nameToObjID[o.name] = o.id
+    inc vID
   result = true
 
 
@@ -206,6 +207,8 @@ proc fetchVeh*(name: string): PVehicleRecord =
 proc fetchItm*(itm: string): PItemRecord =
   return cfg.items[nameToItemID[itm]]
 proc fetchObj*(name: string): PObjectRecord =
+  for name, o in nameToObjID.pairs:
+    echo(name, " >> ", repr(o))
   return cfg.objects[nameToObjID[name]]
 
 proc getField(node: PJsonNode, field: string, target: var float) =
@@ -299,7 +302,8 @@ proc importObject(data: PJsonNode): PObjectRecord =
     result.name = "(broken)"
     return
   result.name = data[0].str
-  
+  result.anim = importAnim(data[1])
+  result.physics = importPhys(data[1])
 proc importItem(data: PJsonNode): PItemRecord =
   new(result)
   if data.kind != JArray or data.len != 3:
