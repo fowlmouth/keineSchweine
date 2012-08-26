@@ -14,11 +14,7 @@ type
     onEnter: TInputFinishedProc
 var
   keyState:    array[-MouseButtonCount.int32 .. KeyCount.int32, bool]
-  text = ""
-  textPos = 0
   mousePos: TVector2f
-  capturingText = false
-  enterFunc: TInputFinishedProc
   activeClient: PKeyClient = nil
   activeInput: PTextInput  = nil
 
@@ -30,9 +26,18 @@ proc newKeyClient*(name: string = "unnamed", setactive = false): PKeyClient =
   result.onKeyDown = initTable[int32, TKeyCallback](16)
   result.onKeyUp   = initTable[int32, TKeyCallback](16)
   result.name = name
-  echo("** new key client ", name)
   if setActive:
     setActive(result)
+
+proc keyPressed*(key: TKeyCode): bool {.inline.} =
+  return keyState[key.int32]
+proc buttonPressed*(btn: TMouseButton): bool {.inline.} =
+  return keyState[-btn.int32]
+
+proc clearKey*(key: TKeyCode) {.inline.} =
+  keyState[key.int32]  = false
+proc clearButton*(btn: TMouseButton) {.inline.} =
+  keyState[-btn.int32] = false
 
 proc addKeyEvent*(key: TKeyCode, ev: TKeyEventKind) {.inline.} =
   let k = key.int32
@@ -72,18 +77,16 @@ proc newTextInput*(text = "", pos = 0, onEnter: TInputFinishedProc = nil): PText
   result.text = text
   result.cursor = pos
   result.onEnter = onEnter
-#start capturing text
 proc setActive*(i: PTextInput) =
   activeInput = i
-  echo("setActive(:PTextInput)")
-proc startCapturingText*() =
-  capturingText = true
 proc stopCapturingText*() =
-  capturingText = false
+  activeInput = nil
+proc clear*(i: PTextInput) =
+  i.text.setLen 0
+  i.cursor = 0
 proc recordText*(i: PTextInput; c: cint) =
   if c > 127 or i.isNil: return
   if c in 32..126: ##printable
-    echo("RECORD TEXT ", c.char)
     let rem = i.text.substr(i.cursor)
     i.text.setLen(i.cursor)
     i.text.add(chr(c.int))
@@ -99,17 +102,6 @@ proc recordText*(i: PTextInput; c: cint) =
     if not i.onEnter.isNil: i.onEnter()
 proc recordText*(i: PTextInput; e: TTextEvent) {.inline.} = 
   recordText(i, e.unicode)
-proc isCapturingInput*(): bool = return capturingText
-
-proc keyPressed*(key: TKeyCode): bool {.inline.} =
-  return keyState[key.int32]
-proc buttonPressed*(btn: TMouseButton): bool {.inline.} =
-  return keyState[-btn.int32]
-
-proc clearKey*(key: TKeyCode) {.inline.} =
-  keyState[key.int32]    = false
-proc clearButton*(btn: TMouseButton) {.inline.} =
-  keyState[btn.int32] = false
 
 proc setMousePos*(x, y: cint) {.inline.} =
   mousePos.x = x.float
