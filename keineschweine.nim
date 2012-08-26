@@ -29,12 +29,8 @@ const
   TAU = PI * 2.0
   TenDegrees = 10.0 * PI / 180.0
   ##temporary constants
-  ACCELRATE  = 0.04
-  DECELRATE  = 0.02
-  STRAFERATE = 0.02
-  TURNRATE   = 0.40
-  FRICTION   = 0.99
-  TOPSPEED   = 0.02
+  W_LIMIT = 0.5
+  V_LIMIT = 35
   MaxLocalBots = 3
 var
   localPlayer: PPlayer
@@ -50,7 +46,9 @@ var
   worldView = window.getView.copy()
   guiView = worldView.copy()
   space = newSpace()
-  ingameClient, specInputClient: PKeyClient
+  ingameClient = newKeyClient("ingame")
+  specInputClient = newKeyClient("spec")
+  specGui = newGuiContainer()
   stars: seq[PSpriteSheet] = @[]
 window.setFramerateLimit(60)
 
@@ -108,25 +106,28 @@ proc newVehicle*(veh: string): PVehicle =
     return nil
   echo("Creating "& veh)
   new(result, free)
-  result.record = fetchVeh(veh)
+  result.record = v
   #result.angle = 0.0
   #result.position = vec2f(50.0, 50.0)
   #result.velocity = vec2f(0.0,  0.0)
   result.sprite = result.record.anim.spriteSheet.sprite.copy()
   result.spriteRect = result.sprite.getTextureRect()
   result.body = space.addBody(
-    newBody(result.record.physics.mass, 10.0))
-  result.body.setMass(result.record.physics.mass)
-  result.body.setMoment(momentForCircle(
-      result.record.physics.mass.cdouble, 0.0, result.record.physics.radius.cdouble, newVector(0.0,0.0)))
+    newBody(
+      result.record.physics.mass,
+      momentForCircle(
+        result.record.physics.mass.cdouble, 
+        0.0, 
+        result.record.physics.radius.cdouble, 
+        vector(0.0,0.0)
+  ) ) )
+  result.body.setAngVelLimit W_LIMIT
+  result.body.setVelLimit result.record.handling.topSpeed
   result.shape = space.addShape(
     chipmunk.newCircleShape(result.body, 
                             result.record.physics.radius.cdouble, 
                             vectorZero))
   echo(veh &" created")
-  echo(repr(result.record.physics))
-  echo($result.body.getMass.round, " | ", $result.body.getMoment())
-  echo($result.shape.getCircleRadius(), " | ", $result.shape.getCircleOffset())
 
 proc createBot() =
   if localBots.len < MaxLocalBots:
@@ -142,7 +143,7 @@ proc accel(obj: PVehicle, dt: float) =
   #obj.velocity += vec2f(
   #  cos(obj.angle) * obj.record.handling.thrust.float * dt,
   #  sin(obj.angle) * obj.record.handling.thrust.float * dt)
-  obj.body.applyForce(
+  obj.body.applyImpulse(
     vectorForAngle(obj.body.getAngle()) * dt * obj.record.handling.thrust,
     vectorZero)
 proc reverse(obj: PVehicle, dt: float) =
@@ -163,11 +164,9 @@ proc strafe_right*(obj: PVehicle, dt: float) =
 proc turn_right*(obj: PVehicle, dt: float) =
   #obj.angle = (obj.angle + (obj.record.handling.rotation.float / 10.0 * dt)) mod TAU
   obj.body.setTorque(obj.record.handling.rotation.float)
-  debugText.setString("Torque: "& $obj.body.getTorque())
 proc turn_left*(obj: PVehicle, dt: float) =
   #obj.angle = (obj.angle - (obj.record.handling.rotation.float / 10.0 * dt)) mod TAU
   obj.body.setTorque(-obj.record.handling.rotation.float)
-  debugText.setString("Torque: "& $obj.body.getTorque() &" angle: "& $obj.body.getAngle())
 proc offsetAngle*(obj: PVehicle): float {.inline.} =
   return (obj.record.anim.angle + obj.body.getAngle())
 
@@ -182,9 +181,11 @@ proc unspec() =
   if not veh.isNil:
     setMyVehicle veh
     localPlayer.spectator = false
+    ingameClient.setActive
 proc spec() =
   setMyVehicle nil
   localPlayer.spectator = true
+  specInputClient.setActive
 
 var 
   specLimiter = newClock()
@@ -235,7 +236,8 @@ proc draw(window: PRenderWindow, obj: PGameObject) {.inline.} =
 proc update*(obj: PVehicle) =
   obj.sprite.setPosition(obj.body.getPos.cp2sfml)
   #obj.sprite.setPosition(obj.position)
-  let x = 4 * obj.record.anim.spriteSheet.framew
+  #let x = ((-obj.body.getAngVel + W_LIMIT) * obj.record.anim.spriteSheet.cols.float).floor * obj.record.anim.spriteSheet.framew.float ## 4 * obj.record.anim.spriteSheet.framew
+  let x = ((-obj.body.getAngVel + W_LIMIT) * (obj.record.anim.spriteSheet.cols - 1).float).floor.int * obj.record.anim.spriteSheet.framew.float ## 4 * obj.record.anim.spriteSheet.framew
   let y = ((obj.offsetAngle.wmod(TAU) / TAU) * obj.record.anim.spriteSheet.rows.float).floor.int * obj.record.anim.spriteSheet.frameh
   if obj.spriteRect.move(x.cint, y.cint):
     obj.sprite.setTextureRect(obj.spriteRect)
@@ -246,14 +248,24 @@ proc update*(obj: PPlayer) =
     obj.vehicle.update()
     obj.nameTag.setPosition(obj.vehicle.body.getPos.cp2sfml + (nameTagOffset * obj.vehicle.record.physics.radius.cfloat))
 
-ingameClient = newKeyClient("ingame")
-ingameClient.registerHandler(KeyF11, down, proc() = toggleSpec())
-ingameClient.registerHandler(KeyRShift, down, proc() =
-  if keyPressed(KeyR):
-    echo("Friction", $activeVehicle.shape.getFriction())
-    echo("Damping", $space.getDamping()))
+proc ff(f: float, precision = 2): string {.inline.} = return formatFloat(f, ffDecimal, precision)
 
-specInputClient = newKeyClient("spec")
+ingameClient.registerHandler(KeyF11, down, proc() = toggleSpec())
+when defined(DebugKeys):
+  ingameClient.registerHandler(KeyRShift, down, proc() =
+    if keyPressed(KeyR):
+      echo("Friction: ", ff(activeVehicle.shape.getFriction()))
+      echo("Damping: ", ff(space.getDamping()))
+    elif keypressed(KeyM):
+      echo("Mass: ", activeVehicle.body.getMass.ff())
+      echo("Moment: ", activeVehicle.body.getMoment.ff())
+    elif keypressed(KeyI):
+      echo(repr(activeVehicle.record)))
+  ingameclient.registerHandler(KeySpace, down, proc() = 
+    echo("ang vel: ", ff(activeVehicle.body.getAngVel(), 3))
+    echo("ang vel limit: ", ff(activevehicle.body.getAngVelLimit(), 3))
+    echo("Sprite COL: ", ((-activeVehicle.body.getAngVel + W_LIMIT) * (activeVehicle.record.anim.spriteSheet.cols-1).float).floor))# * activeVehicle.record.anim.spriteSheet.framew.float))
+
 var specCameraSpeed = 5.0
 specInputClient.registerHandler(KeyF11, down, proc() = toggleSpec())
 specInputClient.registerHandler(KeyLShift, down, proc() = specCameraSpeed *= 2)
@@ -264,6 +276,9 @@ specInputClient.registerHandler(KeyP, down, proc() =
   var objr = fetchObj("Solar Mold")
   echo(repr(objr))
   addObject("Solar Mold"))
+
+proc resetForcesCB(body: PBody; data: pointer) {.cdecl.} =
+  body.resetForces()
 
 when defined(showFPS):
   var i = 0
@@ -290,7 +305,7 @@ proc update(dt: float) =
       activeVehicle.strafe_left(dt)
     elif keyPressed(keyx):
       activeVehicle.strafe_right(dt)
-    worldView.setCenter(activeVehicle.body.getPos.cp2sfml)
+    worldView.setCenter(activeVehicle.body.getPos.floor)#cp2sfml)
   
   if localPlayer != nil: localPlayer.update()
   for b in localBots:
@@ -300,11 +315,14 @@ proc update(dt: float) =
   
   space.step(dt)
   
+  space.eachBody(resetForcesCB, nil)
+  
   when defined(showFPS):
     inc(i)
     if i mod 60 == 0:
       fpsText.setString($(1.0/dt).round)
       i = 0
+
 
 proc loadTexture(filename: string): PTexture =
   var image = newImage(filename)
@@ -335,6 +353,8 @@ proc render() =
   window.setView(guiView)
   when defined(showFPS):
     window.draw(fpsText)
+  if localPlayer.spectator:
+    window.draw(specGui)
   window.display()
 
 proc `$`*(a: TKeyEvent): string =

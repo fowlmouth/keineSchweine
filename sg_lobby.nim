@@ -206,7 +206,7 @@ proc tryTransition*(b: PButton) =
     for e in errors: dispmessage(e)
 proc playOffline(b: PButton) =
   var errors: seq[string] = @[]
-  if loadSettingsFromFile("zones/"& clientSettings.offlineFile, errors):
+  if loadSettingsFromFile(clientSettings.offlineFile, errors):
     transition()
   else:
     dispmessage("Errors reading the file:")

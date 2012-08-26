@@ -5,12 +5,12 @@
    "file":"ships/skith/Mastakith_54x54.png",
    "angle":90},
   "handling":{
-   "thrust":40,
-   "top_speed":30,
+   "thrust":400,
+   "top_speed":80,
    "reverse":20,
-   "rotation":2200},
+   "rotation":1500},
   "physics":{
-   "mass":10,
+   "mass":2,
    "radius":23},
   "weapons":[   "bio_cannon",   "bio_bomb",   "bio_mine"],
   "thrust":{
