@@ -1,4 +1,4 @@
-gotterdammerungarschloch
+keineSchweine
 ========================
 Just a dumb little game
 
@@ -7,7 +7,16 @@ http://dl.dropbox.com/u/37533467/data-08-01-2012.7z
 
 Just unpack it to the data directory and you should be good to go
 
-Build with `nimrod c -r gotterdammerungarschloch`
-or wait for a release
+### Dependencies
+
+* SFML 2.0 (git)
+* CSFML 2.0 (git)
+* Chipmunk 6.1.x (git)
+
+### How to build?
+
+* `git submodule init`
+* `git submodule update`
+* `nimrod c -r keineschweine`
 
 
