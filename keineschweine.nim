@@ -42,19 +42,17 @@ var
   activeVehicle: PVehicle
   myVehicles: seq[PVehicle] = @[]
   objects: seq[PGameObject] = @[]
-  #objects: seq[PGameObject] = @[]
   gameRunning = true
   frameRate = newClock()
   enterKeyTimer = newClock()
   showStars = off
-  window: PRenderWindow
-  worldView, guiView: PView
+  window = newRenderWindow(VideoMode(800, 600, 32), "sup", sfDefaultStyle)
+  worldView = window.getView.copy()
+  guiView = worldView.copy()
   space = newSpace()
   ingameClient, specInputClient: PKeyClient
   stars: seq[PSpriteSheet] = @[]
-
-window = newRenderWindow(VideoMode(800, 600, 32), "sup", sfDefaultStyle)
-lobbyInit()
+window.setFramerateLimit(60)
 
 proc newNameTag*(text: string): PText =
   result = newText()
@@ -89,11 +87,6 @@ proc newPlayer*(alias: string = "poo"): PPlayer =
   result.spectator = true
   result.alias     = alias
   result.nameTag   = newNameTag(result.alias)
-
-localPlayer = newPlayer()
-
-var testrect = intRect(0, 0, 500, 500)
-echo(repr(testrect))
 
 proc free*(veh: PVehicle) =
   ("Destroying vehicle "& veh.record.name).echo
@@ -135,37 +128,16 @@ proc newVehicle*(veh: string): PVehicle =
   echo($result.body.getMass.round, " | ", $result.body.getMoment())
   echo($result.shape.getCircleRadius(), " | ", $result.shape.getCircleOffset())
 
-
-
 proc createBot() =
   if localBots.len < MaxLocalBots:
     var bot = newPlayer("Dodo Brown")
     bot.vehicle = newVehicle("Masta")
     localBots.add(bot)
 
-window.setFramerateLimit(60)
-guiView = window.getView.copy()
-worldView = guiView.copy()
-
-var 
-  i = 0
-  inputText = newText()
-inputText.setPosition(vec2f(10.0, 10.0))
-inputText.setFont(guiFont)
-inputText.setCharacterSize(24)
-inputText.setColor(White)
-
 var inputCursor = newVertexArray(sfml.Lines, 2)
 inputCursor[0].position = vec2f(10.0, 10.0)
 inputCursor[1].position = vec2f(50.0, 90.0)
 
-discard """proc finished(text: string) =
-  echo("\""& text &"\"")
-  resetInputText()
-  stopCapturingText()
-  enterKeyTimer.restart()
-setEnterProc(finished)
-"""
 proc accel(obj: PVehicle, dt: float) =
   #obj.velocity += vec2f(
   #  cos(obj.angle) * obj.record.handling.thrust.float * dt,
@@ -293,6 +265,8 @@ specInputClient.registerHandler(KeyP, down, proc() =
   echo(repr(objr))
   addObject("Solar Mold"))
 
+when defined(showFPS):
+  var i = 0
 proc update(dt: float) =
   if localPlayer.spectator:
     if keyPressed(KeyLeft):
@@ -359,9 +333,6 @@ proc render() =
   for o in objects:
     window.draw(o)
   window.setView(guiView)
-  window.draw(inputText)
-  window.draw(inputCursor)
-  window.draw(debugText)
   when defined(showFPS):
     window.draw(fpsText)
   window.display()
@@ -373,30 +344,31 @@ proc `$`*(a: TKeyEvent): string =
 proc readyMainState() =
   specInputClient.setActive()
 
-LobbyReady()
-
-when defined(LogFTime): from times import cpuTime
-
-while gameRunning:
-  for event in window.filterEvents:
-    if event.kind == EvtClosed:
-      gameRunning = false
-      break
-    elif event.kind == EvtMouseWheelMoved and getActiveState() == Field:
-      if event.mouseWheel.delta == 1:
-        worldView.zoom(0.9)
-      else:
-        worldView.zoom(1.1)
-  let dt = frameRate.restart.asMilliSeconds().float / 1000.0
-  case getActiveState()
-  of Field:
-    update(dt)
-    render()
-  of Lobby:
-    lobbyUpdate(dt)
-    lobbyDraw(window)
-  else:
-    initLevel()
-    echo("Done? lol")
-    doneWithSaidTransition()
-    readyMainState()
+when isMainModule:
+  localPlayer = newPlayer()
+  LobbyInit()
+  LobbyReady()
+  gameRunning = true
+  while gameRunning:
+    for event in window.filterEvents:
+      if event.kind == EvtClosed:
+        gameRunning = false
+        break
+      elif event.kind == EvtMouseWheelMoved and getActiveState() == Field:
+        if event.mouseWheel.delta == 1:
+          worldView.zoom(0.9)
+        else:
+          worldView.zoom(1.1)
+    let dt = frameRate.restart.asMilliSeconds().float / 1000.0
+    case getActiveState()
+    of Field:
+      update(dt)
+      render()
+    of Lobby:
+      lobbyUpdate(dt)
+      lobbyDraw(window)
+    else:
+      initLevel()
+      echo("Done? lol")
+      doneWithSaidTransition()
+      readyMainState()
