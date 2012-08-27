@@ -3,5 +3,5 @@
  "desc": "Beta Testing",
  "port": 2049,
  "settings": "alphazone.json",
- "dirserver":["localhost",2048,"skittles"]
+ "dirserver":["localhost",2048,"alphazone","skittles"]
 }

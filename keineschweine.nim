@@ -1,6 +1,7 @@
 import 
   sfml, sfml_vector, sfml_colors, chipmunk, os, math, strutils, gl, tables,
   input, sg_lobby, sg_gui, sg_assets
+{.deadCodeElim: on.}
 type
   PPlayer* = ref TPlayer
   TPlayer* = object
@@ -29,7 +30,7 @@ const
   TAU = PI * 2.0
   TenDegrees = 10.0 * PI / 180.0
   ##temporary constants
-  W_LIMIT = 0.5
+  W_LIMIT = 0.9
   V_LIMIT = 35
   MaxLocalBots = 3
 var
@@ -40,17 +41,20 @@ var
   objects: seq[PGameObject] = @[]
   gameRunning = true
   frameRate = newClock()
-  enterKeyTimer = newClock()
   showStars = off
-  window = newRenderWindow(VideoMode(800, 600, 32), "sup", sfDefaultStyle)
-  worldView = window.getView.copy()
-  guiView = worldView.copy()
+  levelArea: TIntRect
+  videoMode: TVideoMode
+  window: PRenderWindow
+  worldView: PView
+  guiView: PView
   space = newSpace()
   ingameClient = newKeyClient("ingame")
   specInputClient = newKeyClient("spec")
   specGui = newGuiContainer()
   stars: seq[PSpriteSheet] = @[]
-window.setFramerateLimit(60)
+  playBtn: PButton
+when defined(foo):
+  var mouseSprite: sfml.PCircleShape
 
 proc newNameTag*(text: string): PText =
   result = newText()
@@ -65,14 +69,13 @@ debugText.setPosition(vec2f(0.0, 600.0 - 50.0))
 proc initLevel() =
   loadAllGraphics()
   let levelSettings = getLevelSettings()
+  levelArea.width = levelSettings.size.x
+  levelArea.height= levelSettings.size.y
   if levelSettings.starfield.len > 0:
     showStars = true
-    var rect: TIntRect
-    rect.width = levelSettings.size.x
-    rect.height= levelSettings.size.y
     for sprite in levelSettings.starfield:
       sprite.tex.setRepeated(true)
-      sprite.sprite.setTextureRect(rect)
+      sprite.sprite.setTextureRect(levelArea)
       stars.add(sprite)
 
 when defined(showFPS):
@@ -111,6 +114,7 @@ proc newVehicle*(veh: string): PVehicle =
   #result.position = vec2f(50.0, 50.0)
   #result.velocity = vec2f(0.0,  0.0)
   result.sprite = result.record.anim.spriteSheet.sprite.copy()
+  result.sprite.setOrigin(vec2f(v.anim.spriteSheet.framew / 2, v.anim.spriteSheet.frameh / 2))
   result.spriteRect = result.sprite.getTextureRect()
   result.body = space.addBody(
     newBody(
@@ -120,7 +124,8 @@ proc newVehicle*(veh: string): PVehicle =
         0.0, 
         result.record.physics.radius.cdouble, 
         vector(0.0,0.0)
-  ) ) )
+      ) * 0.62
+  ) )
   result.body.setAngVelLimit W_LIMIT
   result.body.setVelLimit result.record.handling.topSpeed
   result.shape = space.addShape(
@@ -150,15 +155,15 @@ proc reverse(obj: PVehicle, dt: float) =
   #obj.velocity += vec2f(
   #  -cos(obj.angle) * obj.record.handling.reverse.float * dt,
   #  -sin(obj.angle) * obj.record.handling.reverse.float * dt)
-  obj.body.applyForce(
+  obj.body.applyImpulse(
     -vectorForAngle(obj.body.getAngle()) * dt * obj.record.handling.reverse.float,
     vectorZero)
 proc strafe_left*(obj: PVehicle, dt: float) =
-  obj.body.applyForce(
+  obj.body.applyImpulse(
     vectorForAngle(obj.body.getAngle()).perp() * obj.record.handling.strafe.float * dt,
     vectorZero)
 proc strafe_right*(obj: PVehicle, dt: float) =
-  obj.body.applyForce(
+  obj.body.applyImpulse(
     vectorForAngle(obj.body.getAngle()).rperp()* obj.record.handling.strafe.float * dt,
     vectorZero)
 proc turn_right*(obj: PVehicle, dt: float) =
@@ -209,10 +214,12 @@ proc degrees(rad: float): float =
 proc floor(a: TVector): TVector2f {.inline.} =
   result.x = a.x.floor
   result.y = a.y.floor
+proc sfml2cp(a: TVector2f): TVector {.inline.} =
+  result.x = a.x
+  result.y = a.y
 proc cp2sfml(a: TVector): TVector2f {.inline.} =
   result.x = a.x
   result.y = a.y
-
 
 proc free(obj: PGameObject) =
   if not obj.sprite.isNil: destroy(obj.sprite)
@@ -234,21 +241,30 @@ proc draw(window: PRenderWindow, obj: PGameObject) {.inline.} =
 
 
 proc update*(obj: PVehicle) =
-  obj.sprite.setPosition(obj.body.getPos.cp2sfml)
+  obj.sprite.setPosition(obj.body.getPos.floor)
   #obj.sprite.setPosition(obj.position)
   #let x = ((-obj.body.getAngVel + W_LIMIT) * obj.record.anim.spriteSheet.cols.float).floor * obj.record.anim.spriteSheet.framew.float ## 4 * obj.record.anim.spriteSheet.framew
-  let x = ((-obj.body.getAngVel + W_LIMIT) * (obj.record.anim.spriteSheet.cols - 1).float).floor.int * obj.record.anim.spriteSheet.framew.float ## 4 * obj.record.anim.spriteSheet.framew
+  #let x = ((-obj.body.getAngVel + W_LIMIT) * (obj.record.anim.spriteSheet.cols - 1).float).floor.int * obj.record.anim.spriteSheet.framew ## 4 * obj.record.anim.spriteSheet.framew
+  let x = ((-activeVehicle.body.getAngVel + W_LIMIT) / (W_LIMIT*2.0) * (activeVehicle.record.anim.spriteSheet.cols - 1).float).floor.int * obj.record.anim.spriteSheet.framew
   let y = ((obj.offsetAngle.wmod(TAU) / TAU) * obj.record.anim.spriteSheet.rows.float).floor.int * obj.record.anim.spriteSheet.frameh
   if obj.spriteRect.move(x.cint, y.cint):
     obj.sprite.setTextureRect(obj.spriteRect)
 
-var nameTagOffset = vec2f(1.0, 0.0)
+let nameTagOffset = vec2f(0.0, 1.0)
 proc update*(obj: PPlayer) =
   if not obj.spectator:
     obj.vehicle.update()
-    obj.nameTag.setPosition(obj.vehicle.body.getPos.cp2sfml + (nameTagOffset * obj.vehicle.record.physics.radius.cfloat))
+    obj.nameTag.setPosition(obj.vehicle.body.getPos.floor + (nameTagOffset * (obj.vehicle.record.physics.radius + 5).cfloat))
 
 proc ff(f: float, precision = 2): string {.inline.} = return formatFloat(f, ffDecimal, precision)
+proc vec2i(a: TVector2f): TVector2i =
+  result.x = a.x.cint
+  result.y = a.y.cint
+
+proc mouseToSpace*(): TVector =
+  var pos = window.convertCoords(vec2i(getMousePos()), worldView)
+  result = pos.sfml2cp()
+  #result = getMousePos().sfml2cp
 
 ingameClient.registerHandler(KeyF11, down, proc() = toggleSpec())
 when defined(DebugKeys):
@@ -260,21 +276,42 @@ when defined(DebugKeys):
       echo("Mass: ", activeVehicle.body.getMass.ff())
       echo("Moment: ", activeVehicle.body.getMoment.ff())
     elif keypressed(KeyI):
-      echo(repr(activeVehicle.record)))
+      echo(repr(activeVehicle.record))
+    elif keyPressed(KeyH):
+      activeVehicle.body.setPos(vector(100.0, 100.0))
+      activeVehicle.body.setVel(vectorZero))
+  ingameClient.registerHandler(KeyY, down, proc() =
+    const objects = ["Asteroid1", "Asteroid2"]
+    addObject(objects[random(objects.len)]))
+  var 
+    mouseJoint: PConstraint
+    mouseBody = space.addBody(newBody(CpInfinity, CpInfinity))
+  ingameClient.registerHandler(MouseMiddle, down, proc() =
+    var point = mouseToSpace()
+    var shape = space.pointQueryFirst(point, 0, 0)
+    if shape.isNil: 
+      echo("no shape there..\n", $point)
+      return
+    if mouseJoint.isNil:
+      mouseJoint.destroy()
+    let body = shape.getBody()
+    mouseJoint = newPivotJoint(mouseBody, body, vectorZero, body.world2local(point))
+    mouseJoint.maxForce = 50000.0
+    mouseJoint.errorBias = pow(1.0 - 0.15, 60)
+    discard space.addConstraint(mouseJoint))
   ingameclient.registerHandler(KeySpace, down, proc() = 
     echo("ang vel: ", ff(activeVehicle.body.getAngVel(), 3))
     echo("ang vel limit: ", ff(activevehicle.body.getAngVelLimit(), 3))
-    echo("Sprite COL: ", ((-activeVehicle.body.getAngVel + W_LIMIT) * (activeVehicle.record.anim.spriteSheet.cols-1).float).floor))# * activeVehicle.record.anim.spriteSheet.framew.float))
+    echo("Sprite COL: ", ((-activeVehicle.body.getAngVel + W_LIMIT) / (W_LIMIT*2.0) * (activeVehicle.record.anim.spriteSheet.cols-1).float).floor.ff(2)))# * activeVehicle.record.anim.spriteSheet.framew.float))
 
 var specCameraSpeed = 5.0
+specInputClient.registerHandler(MouseLeft, down, proc() = specGui.click(getMousePos()))
 specInputClient.registerHandler(KeyF11, down, proc() = toggleSpec())
 specInputClient.registerHandler(KeyLShift, down, proc() = specCameraSpeed *= 2)
 specInputClient.registerHandler(KeyLShift, up, proc() = specCameraSpeed /= 2)
 
 specInputClient.registerHandler(KeyP, down, proc() =
   echo("addObject(solar mold)")
-  var objr = fetchObj("Solar Mold")
-  echo(repr(objr))
   addObject("Solar Mold"))
 
 proc resetForcesCB(body: PBody; data: pointer) {.cdecl.} =
@@ -314,8 +351,11 @@ proc update(dt: float) =
   #  o.update()
   
   space.step(dt)
-  
   space.eachBody(resetForcesCB, nil)
+  
+  when defined(foo):
+    var coords = window.convertCoords(vec2i(getMousePos()), worldView)
+    mouseSprite.setPosition(coords)
   
   when defined(showFPS):
     inc(i)
@@ -350,6 +390,8 @@ proc render() =
     window.draw(b)
   for o in objects:
     window.draw(o)
+  when defined(Foo):
+    window.draw(mouseSprite)
   window.setView(guiView)
   when defined(showFPS):
     window.draw(fpsText)
@@ -367,7 +409,26 @@ proc readyMainState() =
 when isMainModule:
   localPlayer = newPlayer()
   LobbyInit()
+  
+  videoMode = getClientSettings().resolution
+  window = newRenderWindow(videoMode, "sup", sfDefaultStyle)
+  window.setFrameRateLimit 60
+  
+  worldView = window.getView.copy()
+  guiView = worldView.copy()
+  
+  when defined(foo):
+    mouseSprite = sfml.newCircleShape(14)
+    mouseSprite.setFillColor Transparent
+    mouseSprite.setOutlineColor RoyalBlue
+    mouseSprite.setOutlineThickness 1.4
+    mouseSprite.setOrigin vec2f(14, 14)
+  
   LobbyReady()
+  playBtn = specGui.newButton(
+    "Unspec - F11", position = vec2f(680.0, 8.0), onClick = proc(b: PButton) =
+      toggleSpec())
+  
   gameRunning = true
   while gameRunning:
     for event in window.filterEvents:

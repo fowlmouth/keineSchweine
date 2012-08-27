@@ -1,4 +1,5 @@
 {
+ "resolution": [800,600,32],
  "default-file": "alphazone.json",
  "alias": "foo",
  "directory-server":{

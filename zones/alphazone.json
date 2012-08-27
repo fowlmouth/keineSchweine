@@ -6,11 +6,11 @@
    "angle":90},
   "handling":{
    "thrust":400,
-   "top_speed":80,
-   "reverse":20,
-   "rotation":1500},
+   "top_speed":800,
+   "reverse":250,
+   "rotation":2500},
   "physics":{
-   "mass":2,
+   "mass":4,
    "radius":23},
   "weapons":[   "bio_cannon",   "bio_bomb",   "bio_mine"],
   "thrust":{

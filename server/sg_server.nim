@@ -189,10 +189,13 @@ when isMainModule:
   var jsonSettings = parseFile(zoneCfgFile)
   let port = TPort(jsonSettings["port"].num)
   let zoneFile = jsonSettings["settings"].str
-  if not existsFile(zoneFile):
-    echo("Zone settings file does not exist: ", zoneFile)
+  
+  var path = getAppDir()/../"zones"/zoneFile
+  if not existsFile(path):
+    echo("Zone settings file does not exist: ../zones/", zoneFile)
+    echo(path)
     quit(1)
-  thisZoneSettings = readFile(zoneFile)
+  thisZoneSettings = readFile(path)
   var 
     jsonZoneSettings = parseJson(thisZoneSettings)
     errors: seq[string] = @[]
@@ -206,7 +209,7 @@ when isMainModule:
   thisZone.port = port
   zoneList.zones.add(thisZone)
   echo("Zone list:")
-  for z in zonelist.zones.pairs:
+  for z in zonelist.zones:
     echo("$1 - $2 @ $3:$4" %[z.name, z.desc, z.ip, $z.port])
   createServer(port)
   echo("Listening on port ", port, "...")

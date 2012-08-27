@@ -77,10 +77,10 @@ proc importHandling(data: PJsonNode): THandlingRecord
 proc getActiveState*(): TGameState =
   result = activeState
 proc transition*() = 
-  assert activeState == Lobby
+  assert activeState == Lobby, "Transition() called from a state other than lobby!"
   activeState = Transitioning
 proc doneWithSaidTransition*() =
-  assert activeState == Transitioning
+  assert activeState == Transitioning, "Finished() called from a state other than transitioning!"
   activeState = Field
 
 proc free*(obj: PZoneSettings) =

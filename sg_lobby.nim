@@ -5,6 +5,7 @@ import
   streams_enh, input, sg_packets, sg_assets, sg_gui
 type
   TClientSettings = object
+    resolution*: TVideoMode
     offlineFile: string
     dirserver: tuple[host: string, port: TPort]
 var
@@ -189,7 +190,7 @@ proc lobbyReady*() =
   gui.setActive(u_alias)
 
 proc tryConnect*(b: PButton) =
-  echo("Connecting...")
+  echo("Connecting to ", clientSettings.dirserver.host, ":", clientSettings.dirserver.port)
   connect(clientSettings.dirserver.host, clientSettings.dirserver.port)
 proc tryLogin*(b: PButton) =
   var login = newCsLogin(
@@ -212,6 +213,9 @@ proc playOffline(b: PButton) =
     dispmessage("Errors reading the file:")
     for e in errors: dispmessage(e)
 
+proc getClientSettings*(): TClientSettings =
+  result = clientSettings
+
 proc lobbyInit*() =
   var s = json.parseFile("./client_settings.json")
   clientSettings.offlineFile = "zones/"
@@ -219,7 +223,9 @@ proc lobbyInit*() =
   let dirserv = s["directory-server"]
   clientSettings.dirserver.host = dirserv["host"].str
   clientSettings.dirserver.port = dirserv["port"].num.TPort
-  
+  clientSettings.resolution.width = s["resolution"][0].num.cint
+  clientSettings.resolution.height= s["resolution"][1].num.cint
+  clientSettings.resolution.bitsPerPixel = s["resolution"][2].num.cint
   zonelist.setPosition(vec2f(200.0, 100.0))
   connectionButtons = @[]
   u_alias = gui.newTextEntry(

@@ -1,6 +1,7 @@
 import macros, streams, streams_enh, genpacket, sockets
 type
   PacketID* = char
+
 template idpacket(pktName, id, s2c, c2s: expr): stmt {.immediate.} =
   let `H pktName`* {.inject.} = id
   defPacket(`Sc pktName`, s2c)
