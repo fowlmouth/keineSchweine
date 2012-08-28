@@ -72,6 +72,12 @@ macro defPacket*(body: expr): stmt =
           name,
           ^"string",
           newNimNode(nnkEmpty))
+      of "array":
+        readBody.add(
+          newNimNode(nnkDiscardStmt).und(
+            newCall("readData", streamID, newNimNode(nnkAddr).und(resName), newCall("sizeof", resName))))
+        packBody.add(
+          newCall("writeData", streamID, newNimNode(nnkAddr).und(dotName), newCall("sizeof", dotName))) 
       of "seq":
         ## let lenX = readInt16(s)
         newLenName()
@@ -192,11 +198,19 @@ macro forwardPacket*(e: expr): stmt =
   echo(repr(result))
 
 when isMainModule:
+  defPacket(Foo, tuple[x: array[0..4, int8]])
+  var f = newFoo([4'i8, 3'i8, 2'i8, 1'i8, 0'i8])
+  var s2 = newStringStream("")
+  f.pack(s2)
+  assert s2.data == "\4\3\2\1\0"
+  
   var s = newStringStream()
   s.flushImpl = proc(s: PStream) =
     var z = PStringStream(s)
     z.setPosition(0)
     z.data.setLen(0)
+  
+  
   type
     SomeEnum = enum
       A = 0'i8,

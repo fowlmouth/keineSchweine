@@ -28,6 +28,9 @@ proc lit*(a: char): PNimrodNode {.compileTime.} =
   result = newNimNode(nnkCharLit)
   result.intval = a.ord
 
+proc emptyNode*(): PNimrodNode {.compileTime.} =
+  result = newNimNode(nnkEmpty)
+
 proc dot*(left, right: PNimrodNode): PNimrodNode {.compileTime.} =
   result = newNimNode(nnkDotExpr).und(left, right)
 proc postfix*(a: PNimrodNode, b: string): PNimrodNode {.compileTime.} =
