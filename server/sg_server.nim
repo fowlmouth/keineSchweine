@@ -1,16 +1,9 @@
 import
   sockets, times, streams, streams_enh, tables, json, os,
-  sg_packets, sg_assets, sfml, md5
+  sg_packets, sg_assets, md5, server_utils
 type
   TServer = object
   THandler = proc(client: PCLient; stream: PStream)
-  PClient* = ref TClient
-  TClient* = object
-    addy: TAddress
-    auth: bool
-    alias: string
-    outputBuf: PStringStream
-  TAddress* = tuple[host: string, port: int16]
 var
   server: TSocket
   handlers = initTable[char, THandler](16)
@@ -18,27 +11,20 @@ var
   zoneList = newScZoneList()
   thisZoneSettings: string
   ## I was high.
-  clients = initTable[TAddress, PClient](16)
+  clients = initTable[TupAddress, PClient](16)
   alias2client = initTable[string, PClient](32)
   allClients: seq[PClient] = @[] 
   zonePlayers: seq[PClient] = @[] 
+const
+  PubChatDelay = 100/1000 #100 ms
 
-proc newClient*(addy: TAddress): PClient =
-  new(result)
-  result.addy = addy
-  result.alias = addy.host & ":" & $addy.port.uint16
-  result.outputBuf = newStringStream("")
-  result.outputBuf.flushImpl = proc(stream: PStream) =
-    var s = PStringStream(stream)
-    s.setPosition 0
-    s.data.setLen 0
-  clients[addy] = result
-  allClients.add(result)
 proc findClient*(host: string; port: int16): PClient =
-  let addy: TAddress = (host, port)
+  let addy: TupAddress = (host, port)
   if clients.hasKey(addy):
     return clients[addy]
   result = newClient(addy)
+  clients[addy] = result
+  allClients.add(result)
 proc send*(client: PClient; msg: string): int {.discardable.} =
   result = server.sendTo(client.addy.host, client.addy.port.TPort, msg)
 proc send*[T](client: PClient; pktType: char; pkt: var T) =
@@ -121,6 +107,20 @@ handlers[HZoneQuery] = proc(client: PClient; stream: PStream) =
   var resp = newScZoneQuery(zonePlayers.len.uint16)
   client.send(HZoneQuery, resp)
 
+handlers[HZoneJoinReq] = proc(client: PClient; stream: PStream) =
+  #var joinreq = readCsZoneJoinReq(stream)
+  echo "Join zone request from ", client
+  
+type TFileChallenge = object
+  filename: string
+var fileChallenges = initTable[int16, TFileChallenge](32)
+handlers[HFileChallenge] = proc(client: PClient; stream: PStream) =
+  var fcResp = readCsFileChallenge(stream)
+  if fcResp.needFile:
+    nil
+  else:
+    nil
+
 proc handlePkt(s: PClient; stream: PStream) =
   while not stream.atEnd:  
     var typ = readChar(stream)
@@ -156,7 +156,7 @@ proc poll*(timeout: int = 250) =
       return
     else:
       var client = findClient(addy, port.int16)
-      echo("<< ", res, " ", client.alias, ": ", len(line.data), " ", repr(line.data))
+      #echo("<< ", res, " ", client.alias, ": ", len(line.data), " ", repr(line.data))
       handlePkt(client, line)
   if selectWrite(writes, timeout) > 0:
     let nclients = allClients.len
@@ -187,8 +187,11 @@ when isMainModule:
     else:
       echo("Unknown option: ", key, " ", val)
   var jsonSettings = parseFile(zoneCfgFile)
-  let port = TPort(jsonSettings["port"].num)
-  let zoneFile = jsonSettings["settings"].str
+  let 
+    host = jsonSettings["host"].str
+    port = TPort(jsonSettings["port"].num)
+    zoneFile = jsonSettings["settings"].str
+    dirServerInfo = jsonSettings["dirserver"]
   
   var path = getAppDir()/../"zones"/zoneFile
   if not existsFile(path):
@@ -203,6 +206,12 @@ when isMainModule:
     echo("You have errors in your zone settings:")
     for e in errors: echo("**", e)
     quit(1)
+  
+  var login = newSdZoneLogin(
+    dirServerInfo[2].str, dirServerInfo[3].str,
+    jsonSettings["name"].str, jsonSettings["desc"].str,
+    host, port)  
+  
   thisZone.name = jsonSettings["name"].str
   thisZone.desc = jsonSettings["desc"].str
   thisZone.ip = "localhost"
@@ -213,12 +222,13 @@ when isMainModule:
     echo("$1 - $2 @ $3:$4" %[z.name, z.desc, z.ip, $z.port])
   createServer(port)
   echo("Listening on port ", port, "...")
-  var pubChatTimer = newClock()
+  var pubChatTimer = cpuTime()#newClock()
   while true:
     poll(15)
-    ## TODO sort this type of thing VV into a queue api 
-    if pubChatTimer.getElapsedTime.asMilliseconds > 100:
-      pubChatTimer.restart()
+    ## TODO sort this type of thing VV into a queue api
+    #let now = cpuTime() 
+    if cpuTime() - pubChatTimer > PubChatDelay:       #.getElapsedTime.asMilliseconds > 100:
+      pubChatTimer -= pubChatDelay #.restart()
       if pubChatQueue.getPosition > 0:
         var cn = 0
         let sizePubChat = pubChatQueue.data.len

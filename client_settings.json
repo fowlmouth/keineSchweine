@@ -4,6 +4,6 @@
  "alias": "foo",
  "directory-server":{
   "host":"localhost",
-  "port":2048
+  "port":2049
  }
 }

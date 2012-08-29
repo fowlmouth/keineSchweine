@@ -1,6 +1,6 @@
 
 import
-  sockets, streams, tables, times, math, strutils, json,
+  sockets, streams, tables, times, math, strutils, json, os, md5, 
   sfml, sfml_vector, sfml_colors, 
   streams_enh, input, sg_packets, sg_assets, sg_gui
 type
@@ -8,6 +8,10 @@ type
     resolution*: TVideoMode
     offlineFile: string
     dirserver: tuple[host: string, port: TPort]
+  PServer* = ref TServer
+  TServer* = object
+    sock: TSocket
+    outgoing: PStringStream
 var
   clientSettings: TClientSettings
   gui = newGuiContainer()
@@ -23,7 +27,9 @@ var
   chatInput*: PTextEntry
   messageArea*: PMessageArea
 var
-  client: TSocket
+  dirServer: PServer
+  zone*: PServer
+  activeServer: PServer
   bConnected = false
   outgoing = newStringStream("")
   incoming = newStringStream("")
@@ -32,29 +38,51 @@ var
 template dispmessage(m: expr): stmt = 
   messageArea.add(m)
 
+proc newServerConnection*(host: string; port: TPort): PServer =
+  new(result)
+  echo "Connecting to ", host, ":", port
+  result.sock = socket(typ = SOCK_DGRAM, protocol = IPPROTO_UDP, buffered = false)
+  result.sock.connect host, port
+  result.outgoing = newStringStream("")
+  result.outgoing.data.setLen 1024
+  result.outgoing.data.setLen 0
+  result.outgoing.flushImpl = proc(stream: PStream) =
+    if stream.getPosition == 0: return
+    stream.setPosition 0
+    PStringStream(stream).data.setLen 0
+
+proc close*(s: PServer) =
+  s.sock.close
+  s.outgoing.flush
+
+proc writePkt[T](serv: PServer; pid: PacketID, p: var T) =
+  if serv.isNil: return
+  serv.outgoing.write(pid)
+  p.pack(serv.outgoing)
+proc writePkt[T](pid: PacketID; p: var T) {.inline.} =
+  if activeServer.isNil: return
+  activeServer.writePkt pid, p
+
+proc connectToDirserv() =
+  if not dirServer.isNil:
+    dirServer.close()
+  dirServer = newServerConnection(clientSettings.dirserver.host, clientSettings.dirserver.port)
+  var hello = newCsHello()
+  dirServer.writePkt HHello, hello
+  activeServer = dirServer
+
+
 ## TODO turn this into sockstream 
 incoming.data.setLen 1024
 incoming.data.setLen 0
-outgoing.data.setLen 1024
-outgoing.data.setLen 0
-outgoing.flushImpl = proc(stream: PStream) =
-  if stream.getPosition() == 0: return
-  var s = PStringStream(stream)
-  discard client.sendAsync(s.data)
-  s.setPosition(0)
-  s.data.setLen(0)
 incoming.flushImpl = proc(stream: PStream) =
   #echo("Flushing incoming")
   stream.setPosition(0)
   PStringStream(stream).data.setLen(0)
 
-proc writePkt[T](pid: PacketID, p: var T) =
-  outgoing.write(pid)
-  p.pack(outgoing)
-
 proc sendChat*(text: string) =
   var pkt = newCsChat(text = text)
-  writePkt HChat, pkt
+  activeServer.writePkt HChat, pkt
 proc zoneListReq() =
   var pkt = newCsZonelist("sup")
   writePkt HZonelist, pkt
@@ -141,6 +169,23 @@ incomingHandlers[HChat] = proc(s: PStream) =
   var msg = readScChat(s)
   dispChat(msg)
 
+incomingHandlers[HFileChallenge] = proc(s: PStream) =
+  var challenge = readScFileChallenge(s)
+  var path = "data"
+  case challenge.assetType
+  of FGraphics:
+    path.add "/gfx"
+  of FSound:
+    path.add "/sfx"
+  else: nil
+  
+  var resp: CsFileChallenge
+  if not existsFile(path / challenge.file):
+    resp.needFile = true
+  else:
+    resp.checksum = toMD5(readFile(path / challenge.file))
+  writePkt HFileChallenge, resp
+
 proc copyWith(t: PText, text: string): PText =
   result = t.copy()
 
@@ -159,30 +204,48 @@ proc handlePkts(stream: PStream) =
       incominghandlers[typ](stream)
   echo("handlePkts finished after ", iters, " iterations")
 
-proc connect(host: string, port: TPort) =
-  if not client.isNil: 
-    client.close()
-  client = socket(typ = SOCK_DGRAM, protocol = IPPROTO_UDP, buffered = false)
-  client.connect(host, port)
+proc connectZone(host: string, port: TPort) =
+  if zone.isNil:
+    zone = newServerConnection(host, port)
+  else:
+    zone.sock.connect(host, port)
   var hello = newCsHello()
-  writePkt HHello, hello
+  zone.writePkt HHello, hello
 
-proc poll(timeout: int): bool =
-  if client.isNil: return
+
+proc pollDirserver(timeout: int): bool =
+  if dirServer.isNil: return
+  var ws = @[dirServer]
+
+proc flush*(serv: PServer) =
+  if serv.outgoing.getPosition > 0:
+    let res = serv.sock.sendAsync(serv.outgoing.data)
+    echo "send res: ", res
+    serv.outgoing.flush()
+
+const ChunkSize = 512
+proc pollServer(s: PServer; timeout: int): bool =
+  if s.isNil or s.sock.isNil: return true
   var
-    ws = @[client]
-    rs = @[client]
+    ws = @[s.sock]
+    rs = @[s.sock]
   if select(rs, timeout).bool:
-    setLen(incoming.data, 512)
-    #let res = client.recvAsync(incoming.data)
-    let res = client.recv(addr incoming.data[0], 512)
-    echo("Read ", res)
-    if res > 0:
-      incoming.data.setLen(res)
-      handlePkts(incoming)
+    var recvd = 0
+    while true:
+      let pos = incoming.data.len
+      setLen(incoming.data, pos + ChunkSize)
+      #let res = client.recvAsync(incoming.data)
+      let res = s.sock.recv(addr incoming.data[pos], ChunkSize)
+      echo("Read ", res)
+      if res > 0:
+        if res < ChunkSize:
+          incoming.data.setLen(incoming.data.len - (ChunkSize - res))
+          break
+      else: break
+    handlePkts(incoming)
     incoming.flush()
   if selectWrite(ws, timeout).bool:
-    outgoing.flush()
+    s.flush()
   result = true
 
 proc lobbyReady*() = 
@@ -190,8 +253,7 @@ proc lobbyReady*() =
   gui.setActive(u_alias)
 
 proc tryConnect*(b: PButton) =
-  echo("Connecting to ", clientSettings.dirserver.host, ":", clientSettings.dirserver.port)
-  connect(clientSettings.dirserver.host, clientSettings.dirserver.port)
+  connectToDirserv()
 proc tryLogin*(b: PButton) =
   var login = newCsLogin(
     alias = u_alias.getText(),
@@ -273,9 +335,11 @@ proc lobbyUpdate*(dt: float) =
   i = (i + 1) mod 60
   if i == 0:
     fpsTimer.setString("FPS: "& $round(1.0/dt))
-  if not poll(10) and bConnected:
+  if not pollServer(dirServer, 10) and bConnected:
     setConnected(false)
     echo("Lost connection")
+  discard pollServer(zone, 10)
+    
 
 proc lobbyDraw*(window: PRenderWindow) =
   window.clear(Black)

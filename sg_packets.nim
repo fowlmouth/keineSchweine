@@ -1,4 +1,4 @@
-import macros, streams, streams_enh, genpacket, sockets
+import macros, streams, streams_enh, genpacket, sockets, md5
 type
   PacketID* = char
 
@@ -57,5 +57,15 @@ defPacket(ScSpawn, tuple[
   kind: SpawnKind; id: uint16; record: uint16; amount: uint16])
 
 let HZoneLogin = 'u'
-defPacket(SdZoneLogin, tuple[name: string; desc: string; port: TPort; key: string])
+defPacket(SdZoneLogin, tuple[name: string; key: string; zoneName: string; desc: string; host: string; port: TPort])
+
+type TAssetType* = enum
+  FZoneCfg = 1'i8, FGraphics, FSound 
+forwardPacket(TAssetType, int8)
+forwardPacket(MD5Digest, array[0..15, int8])
+idPacket(FileChallenge, 'F', 
+  tuple[file: string; assetType: TAssetType],
+  tuple[needfile: bool, checksum: MD5Digest])
+
+let HZoneJoinReq* = 'j'
 

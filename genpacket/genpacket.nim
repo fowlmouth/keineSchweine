@@ -120,7 +120,7 @@ macro defPacket*(body: expr): stmt =
       of "string": # length encoded string
         packBody.add(newCall("writeLEStr", streamID, dotName))
         readBody.add(resName := newCall("readLEStr", streamID))
-      of "int8", "int16", "int32", "float32", "float64", "char":
+      of "int8", "int16", "int32", "float32", "float64", "char", "bool":
         packBody.add(newCall(
           "writeData", streamID, newNimNode(nnkAddr).und(dotName), newCall("sizeof", dotName)))
         readBody.add(resName := newCall("read"& $typeFields[i][1].ident, streamID))
@@ -190,12 +190,21 @@ macro forwardPacket*(e: expr): stmt =
       [ "p" -> newNimNode(nnkVarTy).und(typeName),
         "s" -> "PStream" -> newNimNode(nnkNilLit)],
       newNimNode(nnkEmpty)))
-  result[0][4].add((^"result") := newCall("read"& $underlyingType.ident, ^"s").dot(typeName))
+  result[0][4].add(
+    newNimNode(nnkDiscardStmt).und(
+      newCall(
+        "readData", ^"s", newNimNode(nnkAddr).und(^"result"), newCall("sizeof", ^"result"))))
   result[1][4].add(
     newCall(
       "writeData", ^"s", newNimNode(nnkAddr).und(^"p"), newCall(
         "sizeof", ^"p")))
   echo(repr(result))
+
+template forwardPacketT*(typeName: expr): stmt {.dirty, immediate.} =
+  proc `read typeName`*(s: PStream): typeName =
+    discard readData(s, addr result, sizeof(result))
+  proc `pack typeName`*(p: var typeName; s: PStream) =
+    writeData(s, addr p, sizeof(p))
 
 when isMainModule:
   defPacket(Foo, tuple[x: array[0..4, int8]])

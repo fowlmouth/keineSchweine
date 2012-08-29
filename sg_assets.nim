@@ -1,6 +1,16 @@
 import
-  re, json, strutils, tables, math, os,
-  sfml, sfml_vector
+  re, json, strutils, tables, math, os
+
+when defined(NoSFML):
+  import server_utils
+  type TVector2i = object
+    x*, y*: int32
+  proc vec2i(x, y: int32): TVector2i =
+    result.x = x
+    result.y = y
+else:
+  import sfml, sfml_vector
+
 type
   PZoneSettings* = ref TZoneSettings
   TZoneSettings* = object
@@ -48,8 +58,11 @@ type
     file*: string
     framew*,frameh*: int
     rows*, cols*: int
-    sprite*: PSprite
-    tex*: PTexture
+    when defined(NoSFML):
+      contents*: TChecksumFile
+    when not defined(NoSFML):
+      sprite*: PSprite
+      tex*: PTexture
   TGameState* = enum
     Lobby, Transitioning, Field
 var 
@@ -100,26 +113,65 @@ proc getLevelSettings*(): PLevelSettings =
 proc newSprite*(filename: string): PSpriteSheet =
   if hasKey(SpriteSheets, filename):
     return SpriteSheets[filename]
-  var matches: array[0..1, string]
-  if re.match(filename, re"\S+_(\d+)x(\d+)\.\S\S\S", matches):
-    var framew = strutils.parseInt(matches[0])
-    var frameh = strutils.parseInt(matches[1])
+  let path = "data/gfx"/filename
+  if not existsFile(path):
+    raise newException(EIO, "File does not exist: "&path)
+  elif filename =~ re"\S+_(\d+)x(\d+)\.\S\S\S":
     new(result, free)
-    result.file = "data/gfx/" & filename
-    result.framew = framew
-    result.frameh = frameh
+    result.file = path
+    result.framew = strutils.parseInt(matches[0])
+    result.frameh = strutils.parseInt(matches[1])
     SpriteSheets[filename] = result
   else:
     raise newException(EIO, "bad file: "&filename&" must be in format name_WxH.png")
 
+when defined(NoSFML):
+  proc load*(ss: PSpriteSheet): bool =
+    if not ss.contents.contents.isNil: return
+    ss.contents = MD5File(ss.file)
+    result = true
+else:
+  proc load*(ss: PSpriteSheet): bool =
+    if not ss.sprite.isNil: 
+      return
+    var image = sfml.newImage(ss.file)
+    if image == nil:
+      echo "Image could not be loaded"
+      return
+    let size = image.getSize()
+    ss.rows = int(size.y / ss.frameh) #y is h
+    ss.cols = int(size.x / ss.framew) #x is w
+    ss.tex = newTexture(image)
+    image.destroy()
+    ss.sprite = newSprite()
+    ss.sprite.setTexture(ss.tex, true)
+    ss.sprite.setTextureRect(intrect(0, 0, ss.framew.cint, ss.frameh.cint))
+    result = true
+
+template addError(e: expr): stmt {.immediate.} =
+  errors.add(e)
+  result = false
 proc validateSettings*(settings: PJsonNode, errors: var seq[string]): bool =
   result = true
   if settings.kind != JObject:
-    errors.add("Settings root must be an object")
-    return false
+    addError("Settings root must be an object")
+    return
   if not settings.existsKey("vehicles"):
-    errors.add("Vehicles section missing")
+    addError("Vehicles section missing")
+  if not settings.existsKey("objects"):
+    errors.add("Objects section is missing")
     result = false
+  if not settings.existsKey("level"):
+    errors.add("Level settings section is missing")
+    result = false
+  else:
+    let lvl = settings["level"]
+    if lvl.kind != JObject or not lvl.existsKey("size"):
+      errors.add("Invalid level settings")
+      result = false
+    elif not lvl.existsKey("size") or lvl["size"].kind != JArray or lvl["size"].len != 2:
+      errors.add("Invalid/missing level size")
+      result = false
   if not settings.existsKey("items"):
     errors.add("Items section missing")
     result = false
@@ -181,24 +233,6 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
     inc vID
   result = true
 
-
-proc load*(ss: PSpriteSheet): bool =
-  if not ss.sprite.isNil: 
-    return
-  var image = sfml.newImage(ss.file)
-  if image == nil:
-    echo "Image could not be loaded"
-    return
-  let size = image.getSize()
-  ss.rows = int(size.y / ss.frameh) #y is h
-  ss.cols = int(size.x / ss.framew) #x is w
-  ss.tex = newTexture(image)
-  image.destroy()
-  ss.sprite = newSprite()
-  ss.sprite.setTexture(ss.tex, true)
-  ss.sprite.setTextureRect(intrect(0, 0, ss.framew.cint, ss.frameh.cint))
-  result = true
-
 proc `$`*(obj: PSpriteSheet): string =
   return "<Sprite $1 ($2x$3) $4 rows $5 cols>" % [obj.file, $obj.framew, $obj.frameh, $obj.rows, $obj.cols]
 
@@ -207,8 +241,6 @@ proc fetchVeh*(name: string): PVehicleRecord =
 proc fetchItm*(itm: string): PItemRecord =
   return cfg.items[nameToItemID[itm]]
 proc fetchObj*(name: string): PObjectRecord =
-  for name, o in nameToObjID.pairs:
-    echo(name, " >> ", repr(o))
   return cfg.objects[nameToObjID[name]]
 
 proc getField(node: PJsonNode, field: string, target: var float) =

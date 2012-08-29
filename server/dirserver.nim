@@ -3,24 +3,10 @@
 
 import
   sockets, times, streams, streams_enh, tables, json, os,
-  sg_packets, sg_assets, sfml, md5
+  sg_packets, sg_assets, sfml, md5, server_utils
 type
   TServer = object
   THandler = proc(client: PCLient; stream: PStream)
-  PClient* = ref TClient
-  TClient* = object
-    addy: TAddress
-    auth: bool
-    alias: string
-    outputBuf: PStringStream
-  PZone = ref TZone
-  TZone = object
-    name: string
-    host: string
-    port: TPort
-    key: string
-    sockaddr: TAddress
-  TAddress* = tuple[host: string, port: int16]
 var
   server: TSocket
   handlers = initTable[char, THandler](16)
@@ -33,6 +19,7 @@ var
   clients = initTable[TAddress, PClient](16)
   alias2client = initTable[string, PClient](32)
   allClients: seq[PClient] = @[] 
+  zones = initTAble[TAddress, PClient](
 
 proc newClient*(addy: TAddress): PClient =
   new(result)
@@ -58,17 +45,9 @@ proc send*[T](client: PClient; pktType: char; pkt: var T) =
   client.outputBuf.write(pktType)
   pkt.pack(client.outputBuf)
   #echo("output buf is now ", repr(client.outputBuf))
-proc setAlias(client: PClient; newName: string): bool =
-  if alias2client.hasKey(newName):
-    return
-  if alias2client.hasKey(client.alias):
-    alias2client.del(client.alias)
-  client.alias = newName
-  alias2client[newName] = client
-  result = true
+
 proc `$`*(client: PClient): string =
   result = client.alias
-
 proc sendZoneList(client: PClient) = 
   echo(">> zonelist ", client)
   client.send(HZonelist, zonelist)
@@ -85,6 +64,16 @@ proc sendChat(client: PClient; kind: ChatType; txt: string) =
   client.send(HChat, m)
 proc sendError(client: PClient; txt: string) {.inline.} =
   sendChat(client, CError, txt)
+
+proc login(client: PClient; login: CSLogin): bool =
+  if alias2client.hasKey(login.alias):
+    client.sendError("Alias in use.")
+    return
+  if alias2client.hasKey(client.alias):
+    alias2client.del(client.alias)
+  client.alias = login.alias
+  alias2client[client.alias] = client
+  result = true
 
 var pubChatQueue = newStringStream("")
 pubChatQueue.flushImpl = proc(stream: PStream) =
@@ -107,12 +96,9 @@ handlers[HLogin] = proc(client: PClient; stream: PStream) =
   if client.auth:
     client.sendError("You are already logged in.")
   else:
-    if client.setAlias(loginInfo.alias):
-      client.auth = true
+    if client.login(loginInfo):
       client.sendMessage("Welcome "& client.alias)
       client.sendZonelist()
-    else:
-      client.sendError("Invalid alias")
 handlers[HZoneList] = proc(client: PClient; stream: PStream) =
   var pinfo = readCsZoneList(stream)
   echo("** zonelist req")
@@ -126,11 +112,6 @@ handlers[HChat] = proc(client: PClient; stream: PStream) =
       alias2client[chat.target].forwardPrivate(client, chat.text)
   else:
     queuePub(client.alias, chat)
-handlers[HZoneQuery] = proc(client: PClient; stream: PStream) =
-  echo("Got zone query")
-  var q = readCsZoneQuery(stream)
-  var resp = newScZoneQuery(zonePlayers.len.uint16)
-  client.send(HZoneQuery, resp)
 
 
 proc zoneLogin(client: PClient; login: SdZoneLogin) =
