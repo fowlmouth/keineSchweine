@@ -2,7 +2,7 @@
 import
   sockets, streams, tables, times, math, strutils, json, os, md5, 
   sfml, sfml_vector, sfml_colors, 
-  streams_enh, input, sg_packets, sg_assets, sg_gui
+  streams_enh, input_helpers, zlib_helpers, sg_packets, sg_assets, sg_gui
 type
   TClientSettings = object
     resolution*: TVideoMode
@@ -88,8 +88,6 @@ proc zoneListReq() =
   writePkt HZonelist, pkt
 
 ##key handlers
-keyClient.registerHandler(KeyM, down, proc() = 
-  echo(repr(gui.renderState), "\n--------"))
 keyClient.registerHandler(MouseMiddle, down, proc() = 
   gui.setPosition(getMousePos()))
 

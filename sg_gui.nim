@@ -1,6 +1,6 @@
 import
   sfml, sfml_vector, sfml_colors,
-  input
+  input_helpers
 {.deadCodeElim: on.}
 type
   PGuiContainer* = ref TGuiContainer
@@ -22,7 +22,7 @@ type
   TButtonCollection* = object of TGuiContainer
   PTextEntry* = ref TTextEntry
   TTextEntry* = object of TButton
-    inputClient: input.PTextInput
+    inputClient: input_helpers.PTextInput
   PMessageArea* = ref TMessageArea
   TMessageArea* = object of TGuiObject
     pos: TVector2f
@@ -163,14 +163,14 @@ proc newTextEntry*(container: PGuiContainer; text: string;
 proc init(t: PTextEntry; text: string; onEnter: TInputFinishedProc) =
   t.inputClient = newTextInput(text, text.len, onEnter)
 proc draw(window: PRenderWindow; t: PTextEntry) =
-  draw(window, PButton(t), nil)
+  window.draw PButton(t)
 proc clearText*(t: PTextEntry) =
   t.inputClient.clear()
 proc getText*(t: PTextEntry): string =
   return t.inputClient.text
 proc setActive*(t: PTextEntry) =
   if not t.isNil and not t.inputClient.isNil:
-    input.setActive(t.inputClient)
+    input_helpers.setActive(t.inputClient)
 
 
 proc newMessageArea*(container: PGuiContainer; position: TVector2f): PMessageArea =
