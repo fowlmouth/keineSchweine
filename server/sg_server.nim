@@ -18,6 +18,7 @@ var
 const
   PubChatDelay = 100/1000 #100 ms
 
+var cliID = newIDGen[uint16]()
 proc findClient*(host: string; port: int16): PClient =
   let addy: TupAddress = (host, port)
   if clients.hasKey(addy):
@@ -25,14 +26,7 @@ proc findClient*(host: string; port: int16): PClient =
   result = newClient(addy)
   clients[addy] = result
   allClients.add(result)
-proc send*(client: PClient; msg: string): int {.discardable.} =
-  result = server.sendTo(client.addy.host, client.addy.port.TPort, msg)
-proc send*[T](client: PClient; pktType: char; pkt: var T) =
-  #echo(">> ", client, " ", pktType)
-  #echo(client.outputBuf.getPosition())
-  client.outputBuf.write(pktType)
-  pkt.pack(client.outputBuf)
-  #echo("output buf is now ", repr(client.outputBuf))
+
 proc setAlias(client: PClient; newName: string): bool =
   if alias2client.hasKey(newName):
     return
@@ -41,12 +35,11 @@ proc setAlias(client: PClient; newName: string): bool =
   client.alias = newName
   alias2client[newName] = client
   result = true
-proc `$`*(client: PClient): string =
-  result = client.alias
 
 proc sendZoneList(client: PClient) = 
   echo(">> zonelist ", client)
   client.send(HZonelist, zonelist)
+
 proc forwardPrivate(rcv: PClient; sender: PClient; txt: string) =
   var m = newScChat(CPriv, sender.alias, txt)
   rcv.send(HChat, m)

@@ -5,7 +5,6 @@ import
   sockets, times, streams, streams_enh, tables, json, os,
   sg_packets, sg_assets, sfml, md5, server_utils
 type
-  TServer = object
   THandler = proc(client: PCLient; stream: PStream)
 var
   server: TSocket
@@ -19,35 +18,14 @@ var
   clients = initTable[TAddress, PClient](16)
   alias2client = initTable[string, PClient](32)
   allClients: seq[PClient] = @[] 
-  zones = initTAble[TAddress, PClient](
+  zones = initTable[TAddress, PClient](16)
 
-proc newClient*(addy: TAddress): PClient =
-  new(result)
-  result.addy = addy
-  result.alias = addy.host & ":" & $addy.port.uint16
-  result.outputBuf = newStringStream("")
-  result.outputBuf.flushImpl = proc(stream: PStream) =
-    var s = PStringStream(stream)
-    s.setPosition 0
-    s.data.setLen 0
-  clients[addy] = result
-  allClients.add(result)
 proc findClient*(host: string; port: int16): PClient =
   let addy: TAddress = (host, port)
   if clients.hasKey(addy):
     return clients[addy]
   result = newClient(addy)
-proc send*(client: PClient; msg: string): int {.discardable.} =
-  result = server.sendTo(client.addy.host, client.addy.port.TPort, msg)
-proc send*[T](client: PClient; pktType: char; pkt: var T) =
-  #echo(">> ", client, " ", pktType)
-  #echo(client.outputBuf.getPosition())
-  client.outputBuf.write(pktType)
-  pkt.pack(client.outputBuf)
-  #echo("output buf is now ", repr(client.outputBuf))
 
-proc `$`*(client: PClient): string =
-  result = client.alias
 proc sendZoneList(client: PClient) = 
   echo(">> zonelist ", client)
   client.send(HZonelist, zonelist)

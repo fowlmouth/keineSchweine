@@ -1,6 +1,6 @@
 import 
   sfml, sfml_vector, sfml_colors, chipmunk, os, math, strutils, gl, tables,
-  input, sg_lobby, sg_gui, sg_assets
+  input_helpers, sg_lobby, sg_gui, sg_assets
 {.deadCodeElim: on.}
 type
   PPlayer* = ref TPlayer

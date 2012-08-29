@@ -87,10 +87,12 @@ proc clear*(i: PTextInput) =
 proc recordText*(i: PTextInput; c: cint) =
   if c > 127 or i.isNil: return
   if c in 32..126: ##printable
-    let rem = i.text.substr(i.cursor)
-    i.text.setLen(i.cursor)
-    i.text.add(chr(c.int))
-    i.text.add(rem)
+    if i.cursor == i.text.len: i.text.add(c.int.chr)
+    else: 
+      let rem = i.text.substr(i.cursor)
+      i.text.setLen(i.cursor)
+      i.text.add(chr(c.int))
+      i.text.add(rem)
     inc(i.cursor)
   elif c == 8: ## \b  backspace
     if i.text.len > 0 and i.cursor > 0:

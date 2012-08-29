@@ -9,7 +9,6 @@ type
     activeEntry: PTextEntry
     widgets: seq[PGuiObject]
     buttons: seq[PButton]
-    renderState*: PRenderStates
   PGuiObject* = ref TGuiObject
   TGuiObject* = object of TObject
   PButton* = ref TButton
@@ -48,7 +47,7 @@ proc draw*(window: PRenderWindow; container: PGuiContainer) {.inline.}
 proc newMessageArea*(container: PGuiContainer; position: TVector2f): PMessageArea {.discardable.}
 proc add*(m: PMessageArea; text: string): PText {.discardable.}
 
-proc draw*(window: PRenderWindow; b: PButton; rs: PRenderStates) {.inline.}
+proc draw*(window: PRenderWindow; b: PButton) {.inline.}
 proc click*(b: PButton; p: TVector2f)
 proc setPosition*(b: PButton; p: TVector2f)
 proc setString*(b: PButton; s: string) {.inline.}
@@ -79,10 +78,9 @@ proc newGuiContainer*(): PGuiContainer =
   new(result, free)
   result.widgets = @[]
   result.buttons = @[]
-  result.renderState = cast[PRenderStates](alloc0(sizeof(TRenderStates)))
-  result.renderState.transform = identityMatrix ##transformFromMatrix(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
 proc free*(container: PGuiContainer) = 
-  dealloc(container.renderState)
+  container.widgets = nil
+  container.buttons = nil
 proc add*(container: PGuiContainer; widget: PGuiObject) =
   container.widgets.add(widget)
 proc add*(container: PGuiContainer; button: PButton) =
@@ -104,7 +102,7 @@ proc update*(container: PGuiContainer; dt: float) =
     container.activeEntry.setString(container.activeEntry.getText())
 proc draw*(window: PRenderWindow; container: PGuiContainer) =
   for b in container.buttons:
-    window.draw(b, container.renderState)
+    window.draw b
 
 proc free(c: PButton) =
   c.bg.destroy()
@@ -140,9 +138,9 @@ proc enable*(b: PButton) =
 proc disable*(b: PButton) =
   b.enabled = false
   b.text.setColor(Gray)
-proc draw*(window: PRenderWindow; b: PButton; rs: PRenderStates) =
-  window.draw(b.bg, rs)
-  window.draw(b.text, rs)
+proc draw*(window: PRenderWindow; b: PButton) =
+  window.draw b.bg
+  window.draw b.text
 proc setPosition*(b: PButton, p: TVector2f) =
   b.bg.setPosition(p)
   b.text.setPosition(p)
