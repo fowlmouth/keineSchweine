@@ -102,6 +102,11 @@ proc free*(veh: PVehicle) =
   veh.body   = nil
   veh.shape  = nil
 
+
+proc angularDampingSim*(body: PBody, gravity: TVector, damping: CpFloat; dt: CpFloat){.cdecl.} =
+  let angVel = body.getAngVel()
+  body.setAngVel angVel - (angVel * 0.98 * dt)
+  body.updateVelocity(gravity, damping, dt)
 proc newVehicle*(veh: string): PVehicle =
   var v = fetchVeh(veh)
   if not v.playable:
@@ -128,6 +133,7 @@ proc newVehicle*(veh: string): PVehicle =
   ) )
   result.body.setAngVelLimit W_LIMIT
   result.body.setVelLimit result.record.handling.topSpeed
+  result.body.velocityFunc = angularDampingSim
   result.shape = space.addShape(
     chipmunk.newCircleShape(result.body, 
                             result.record.physics.radius.cdouble, 
