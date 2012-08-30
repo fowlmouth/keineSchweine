@@ -127,8 +127,8 @@ proc newSprite*(filename: string): PSpriteSheet =
 
 when defined(NoSFML):
   proc load*(ss: PSpriteSheet): bool =
-    if not ss.contents.contents.isNil: return
-    ss.contents = MD5File(ss.file)
+    if not ss.contents.unpackedSize == 0: return
+    ss.contents = checksumFile(ss.file)
     result = true
 else:
   proc load*(ss: PSpriteSheet): bool =

@@ -1,6 +1,6 @@
 import zlib
 
-proc compress(source: string): string =
+proc compress*(source: string): string =
   var
     sourcelen = source.len
     destlen = sourcelen + (sourcelen.float * 0.1).int + 16
@@ -12,7 +12,7 @@ proc compress(source: string): string =
   elif destLen < result.len:
     result.setLen(destLen)
 
-proc uncompress(source: string, destLen: var int): string =
+proc uncompress*(source: string, destLen: var int): string =
   result = ""
   result.setLen destLen
   var res = zlib.uncompress(cstring(result), addr destLen, cstring(source), source.len)

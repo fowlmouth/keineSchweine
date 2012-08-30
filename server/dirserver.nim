@@ -3,7 +3,7 @@
 
 import
   sockets, times, streams, streams_enh, tables, json, os,
-  sg_packets, sg_assets, sfml, md5, server_utils
+  sg_packets, sg_assets, md5, server_utils
 type
   THandler = proc(client: PCLient; stream: PStream)
 var
@@ -13,18 +13,19 @@ var
   zoneList = newScZoneList()
   thisZoneSettings: string
   zoneSlots: seq[tuple[name: string; key: string]] = @[]
-  zones: seq[PZone] = @[]
+  zones: seq[PClient] = @[]
   ## I was high.
-  clients = initTable[TAddress, PClient](16)
+  clients = initTable[TupAddress, PClient](16)
   alias2client = initTable[string, PClient](32)
   allClients: seq[PClient] = @[] 
-  zones = initTable[TAddress, PClient](16)
 
 proc findClient*(host: string; port: int16): PClient =
-  let addy: TAddress = (host, port)
+  let addy: TupAddress = (host, port)
   if clients.hasKey(addy):
     return clients[addy]
   result = newClient(addy)
+  clients[addy] = result
+  allClients.add(result)
 
 proc sendZoneList(client: PClient) = 
   echo(">> zonelist ", client)
@@ -43,15 +44,24 @@ proc sendChat(client: PClient; kind: ChatType; txt: string) =
 proc sendError(client: PClient; txt: string) {.inline.} =
   sendChat(client, CError, txt)
 
-proc login(client: PClient; login: CSLogin): bool =
+proc loginPlayer(client: PClient; login: CsLogin): bool =
   if alias2client.hasKey(login.alias):
     client.sendError("Alias in use.")
     return
-  if alias2client.hasKey(client.alias):
-    alias2client.del(client.alias)
+  client.auth = true
+  client.kind = CPlayer
   client.alias = login.alias
   alias2client[client.alias] = client
   result = true
+proc loginZone(client: PClient; login: SdZoneLogin): bool =
+  if not client.auth:
+    for s in zoneSlots.items:
+      if s.name == login.name and s.key == login.key:
+        client.auth = true
+        client.kind = CServer
+        client.record = login.record
+        result = true
+        break
 
 var pubChatQueue = newStringStream("")
 pubChatQueue.flushImpl = proc(stream: PStream) =
@@ -74,7 +84,7 @@ handlers[HLogin] = proc(client: PClient; stream: PStream) =
   if client.auth:
     client.sendError("You are already logged in.")
   else:
-    if client.login(loginInfo):
+    if client.loginPlayer(loginInfo):
       client.sendMessage("Welcome "& client.alias)
       client.sendZonelist()
 handlers[HZoneList] = proc(client: PClient; stream: PStream) =
@@ -91,16 +101,16 @@ handlers[HChat] = proc(client: PClient; stream: PStream) =
   else:
     queuePub(client.alias, chat)
 
-
-proc zoneLogin(client: PClient; login: SdZoneLogin) =
-  for s in zoneSlots.items:
-    if s.name == login.name and s.key == login.key:
-      
-    
+proc sendServMsg(client: PClient; msg: string) =
+  var m = newDsMsg(msg)
+  client.send HDsMsg, m
 handlers[HZoneLogin] = proc(client: PClient; stream: PStream) =
   var 
     login = readSdZoneLogin(stream)
-  zoneLogin(client, login)
+  if not client.loginZone(login):
+    client.sendServMsg "Invalid login"
+  else:
+    client.sendServMsg "Welcome to the servers"
 
 
 proc handlePkt(s: PClient; stream: PStream) =
@@ -135,7 +145,7 @@ proc poll*(timeout: int = 250) =
       return
     else:
       var client = findClient(addy, port.int16)
-      echo("<< ", res, " ", client.alias, ": ", len(line.data), " ", repr(line.data))
+      echo("<< ", res, " ", client, ": ", len(line.data), " ", repr(line.data))
       handlePkt(client, line)
   if selectWrite(writes, timeout) > 0:
     let nclients = allClients.len
@@ -158,7 +168,7 @@ when isMainModule:
       case key
       of "f", "file": 
         if existsFile(val):
-          zoneCfgFile = val
+          cfgFile = val
         else:
           echo("File does not exist: ", val)
       else:
@@ -173,12 +183,13 @@ when isMainModule:
   
   createServer(port)
   echo("Listening on port ", port, "...")
-  var pubChatTimer = newClock()
+  var pubChatTimer = cpuTime() #newClock()
+  const PubChatDelay = 1000/1000
   while true:
     poll(15)
     ## TODO sort this type of thing VV into a queue api 
-    if pubChatTimer.getElapsedTime.asMilliseconds > 100:
-      pubChatTimer.restart()
+    if cpuTime() - pubChatTimer > PubChatDelay:       #.getElapsedTime.asMilliseconds > 100:
+      pubChatTimer -= pubChatDelay
       if pubChatQueue.getPosition > 0:
         var cn = 0
         let sizePubChat = pubChatQueue.data.len

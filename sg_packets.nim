@@ -56,7 +56,7 @@ forwardPacket(SpawnKind, int8)
 defPacket(ScSpawn, tuple[
   kind: SpawnKind; id: uint16; record: uint16; amount: uint16])
 
-let HZoneLogin = 'u'
+let HZoneLogin* = 'u'
 defPacket(SdZoneLogin, tuple[name: string; key: string; record: ScZoneRecord])
 
 type TAssetType* = enum
@@ -68,4 +68,7 @@ idPacket(FileChallenge, 'F',
   tuple[needfile: bool, checksum: MD5Digest])
 
 let HZoneJoinReq* = 'j'
+
+let HDsMsg* = 'c'
+defPacket(DsMsg, tuple[msg: string])
 

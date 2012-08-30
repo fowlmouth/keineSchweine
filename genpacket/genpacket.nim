@@ -158,7 +158,7 @@ macro defPacket*(body: expr): stmt =
   result.add(constructor.und(constructorBody))
   result.add(pack.und(packBody))
   result.add(read.und(readBody))
-  echo(repr(result))
+  #echo(repr(result))
 
 proc `->`(a: string, b: string): PNimrodNode {.compileTime.} =
   result = newNimNode(nnkIdentDefs).und(^a, ^b, newNimNode(nnkEmpty))
@@ -198,7 +198,7 @@ macro forwardPacket*(e: expr): stmt =
     newCall(
       "writeData", ^"s", newNimNode(nnkAddr).und(^"p"), newCall(
         "sizeof", ^"p")))
-  echo(repr(result))
+  #echo(repr(result))
 
 template forwardPacketT*(typeName: expr): stmt {.dirty, immediate.} =
   proc `read typeName`*(s: PStream): typeName =

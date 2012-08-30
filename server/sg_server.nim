@@ -1,15 +1,15 @@
 import
   sockets, times, streams, streams_enh, tables, json, os,
-  sg_packets, sg_assets, md5, server_utils
+  sg_packets, sg_assets, md5, server_utils, client_helpers
 type
-  TServer = object
   THandler = proc(client: PCLient; stream: PStream)
 var
   server: TSocket
+  dirServer: PServer
   handlers = initTable[char, THandler](16)
   thisZone = newScZoneRecord("local", "sup")
-  zoneList = newScZoneList()
-  thisZoneSettings: string
+  thisZoneSettings: PZoneSettings
+  zoneSettings: TChecksumFile
   ## I was high.
   clients = initTable[TupAddress, PClient](16)
   alias2client = initTable[string, PClient](32)
@@ -18,7 +18,6 @@ var
 const
   PubChatDelay = 100/1000 #100 ms
 
-var cliID = newIDGen[uint16]()
 proc findClient*(host: string; port: int16): PClient =
   let addy: TupAddress = (host, port)
   if clients.hasKey(addy):
@@ -38,7 +37,7 @@ proc setAlias(client: PClient; newName: string): bool =
 
 proc sendZoneList(client: PClient) = 
   echo(">> zonelist ", client)
-  client.send(HZonelist, zonelist)
+  #client.send(HZonelist, zonelist)
 
 proc forwardPrivate(rcv: PClient; sender: PClient; txt: string) =
   var m = newScChat(CPriv, sender.alias, txt)
@@ -186,37 +185,43 @@ when isMainModule:
     zoneFile = jsonSettings["settings"].str
     dirServerInfo = jsonSettings["dirserver"]
   
-  var path = getAppDir()/../"zones"/zoneFile
+  var path = getAppDir()/../"data"/zoneFile
   if not existsFile(path):
-    echo("Zone settings file does not exist: ../zones/", zoneFile)
+    echo("Zone settings file does not exist: ../data/", zoneFile)
     echo(path)
     quit(1)
-  thisZoneSettings = readFile(path)
-  var 
-    jsonZoneSettings = parseJson(thisZoneSettings)
-    errors: seq[string] = @[]
-  if not validateSettings(jsonZoneSettings, errors):
-    echo("You have errors in your zone settings:")
-    for e in errors: echo("**", e)
-    quit(1)
   
-  var login = newSdZoneLogin(
-    dirServerInfo[2].str, dirServerInfo[3].str,
-    jsonSettings["name"].str, jsonSettings["desc"].str,
-    host, port)  
+  
+  setCurrentDir getAppDir().parentDir()
+  let zonesettingss = readFile(path)
+  block:
+    var 
+      errors: seq[string] = @[]
+    if not loadSettings(zoneSettingss, errors):
+      echo("You have errors in your zone settings:")
+      for e in errors: echo("**", e)
+      quit(1)
+  zoneSettings = checksumStr(zoneSettingsS)
   
   thisZone.name = jsonSettings["name"].str
   thisZone.desc = jsonSettings["desc"].str
   thisZone.ip = "localhost"
   thisZone.port = port
-  zoneList.zones.add(thisZone)
-  echo("Zone list:")
-  for z in zonelist.zones:
-    echo("$1 - $2 @ $3:$4" %[z.name, z.desc, z.ip, $z.port])
+  var login = newSdZoneLogin(
+    dirServerInfo[2].str, dirServerInfo[3].str,
+    thisZone)  
+  
+  dirServer = newServerConnection(dirServerInfo[0].str, dirServerInfo[1].num.TPort)
+  dirServer.handlers[HDsMsg] = proc(serv: PServer; stream: PStream) =
+    var m = readDsMsg(stream)
+    echo("DirServer> ", m.msg)
+  dirServer.writePkt HZoneLogin, login
+  
   createServer(port)
   echo("Listening on port ", port, "...")
   var pubChatTimer = cpuTime()#newClock()
   while true:
+    discard dirServer.pollServer(15)
     poll(15)
     ## TODO sort this type of thing VV into a queue api
     #let now = cpuTime() 

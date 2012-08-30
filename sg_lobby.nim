@@ -2,16 +2,12 @@
 import
   sockets, streams, tables, times, math, strutils, json, os, md5, 
   sfml, sfml_vector, sfml_colors, 
-  streams_enh, input_helpers, zlib_helpers, sg_packets, sg_assets, sg_gui
+  streams_enh, input_helpers, zlib_helpers, client_helpers, sg_packets, sg_assets, sg_gui
 type
   TClientSettings = object
     resolution*: TVideoMode
     offlineFile: string
     dirserver: tuple[host: string, port: TPort]
-  PServer* = ref TServer
-  TServer* = object
-    sock: TSocket
-    outgoing: PStringStream
 var
   clientSettings: TClientSettings
   gui = newGuiContainer()
@@ -32,57 +28,99 @@ var
   activeServer: PServer
   bConnected = false
   outgoing = newStringStream("")
-  incoming = newStringStream("")
   connectionButtons: seq[PButton] #buttons that depend on connection to function
 
 template dispmessage(m: expr): stmt = 
   messageArea.add(m)
 
-proc newServerConnection*(host: string; port: TPort): PServer =
-  new(result)
-  echo "Connecting to ", host, ":", port
-  result.sock = socket(typ = SOCK_DGRAM, protocol = IPPROTO_UDP, buffered = false)
-  result.sock.connect host, port
-  result.outgoing = newStringStream("")
-  result.outgoing.data.setLen 1024
-  result.outgoing.data.setLen 0
-  result.outgoing.flushImpl = proc(stream: PStream) =
-    if stream.getPosition == 0: return
-    stream.setPosition 0
-    PStringStream(stream).data.setLen 0
-
-proc close*(s: PServer) =
-  s.sock.close
-  s.outgoing.flush
-
-proc writePkt[T](serv: PServer; pid: PacketID, p: var T) =
-  if serv.isNil: return
-  serv.outgoing.write(pid)
-  p.pack(serv.outgoing)
 proc writePkt[T](pid: PacketID; p: var T) {.inline.} =
   if activeServer.isNil: return
   activeServer.writePkt pid, p
 
+proc setConnected(state: bool) =
+  if state:
+    bConnected = true
+    for b in connectionButtons: enable(b)
+  else:
+    bConnected = false
+    for b in connectionButtons: disable(b)
+
+proc setActiveZone(ind: int; zone: ScZoneRecord) =
+  #hilight it or something
+  dispmessage("Selected " & zone.name)
+
+proc dispChat(kind: ChatType, text: string, fromPlayer: string = "") = 
+  var m = messageArea.add(
+    if fromPlayer == "": text
+    else: "<$1> $2" % [fromPlayer, text])
+  case kind
+  of CPub: m.setColor(RoyalBlue)
+  of CSystem: m.setColor(Green)
+  else: m.setColor(Red)
+proc dispChat(msg: ScChat) {.inline.} =
+  dispChat(msg.kind, msg.text, msg.fromPlayer)
+
+
 proc connectToDirserv() =
-  if not dirServer.isNil:
-    dirServer.close()
-  dirServer = newServerConnection(clientSettings.dirserver.host, clientSettings.dirserver.port)
+  if dirServer.isNil:
+    dirServer = newServerConnection(clientSettings.dirserver.host, clientSettings.dirserver.port)
+    dirServer.handlers[HHello] = proc(serv: PServer; s: PStream) = 
+      let msg = readScHello(s)
+      dispChat(CSystem, msg.resp)
+      setConnected(true)
+    dirServer.handlers[HLogin] = proc(serv: PServer; s: PStream) =
+      var info = readScLogin(s)
+      dispmessage("We logged in :>")
+    dirServer.handlers[HZonelist] = proc(serv: PServer; s: PStream) =
+      var 
+        info = readScZonelist(s)
+        zones = info.zones
+      if zones.len > 0:
+        zonelist.clearButtons()
+        var pos = vec2f(0.0, 0.0)
+        zonelist.newButton(
+          text = "Zonelist - "& info.network,
+          position = pos,
+          onClick = proc(b: PButton) =
+            dispmessage("Click on header"))
+        pos.y += 20
+        for i in 0..zones.len - 1:
+          var z = zones[i]
+          zonelist.newButton(
+            text = z.name, position = pos,
+            onClick = proc(b: PButton) = 
+              setActiveZone(i, z))
+          pos.y += 20
+        showZonelist = true
+    dirServer.handlers[HPoing] = proc(serv: PServer; s: PStream) = 
+      var ping = readPoing(s)
+      dispmessage("Ping: "& $ping.time)
+      ping.time = epochTime().float32
+      serv.writePkt HPoing, ping
+    dirServer.handlers[HChat] = proc(serv: PServer; s: PStream) =
+      var msg = readScChat(s)
+      dispChat(msg)
+    dirServer.handlers[HFileChallenge] = proc(serv: PServer; s: PStream) =
+      var challenge = readScFileChallenge(s)
+      var path = "data"
+      case challenge.assetType
+      of FGraphics:
+        path.add "/gfx"
+      of FSound:
+        path.add "/sfx"
+      else: nil
+      
+      var resp: CsFileChallenge
+      if not existsFile(path / challenge.file):
+        resp.needFile = true
+      else:
+        resp.checksum = toMD5(readFile(path / challenge.file))
+      serv.writePkt HFileChallenge, resp
   var hello = newCsHello()
   dirServer.writePkt HHello, hello
   activeServer = dirServer
 
 
-## TODO turn this into sockstream 
-incoming.data.setLen 1024
-incoming.data.setLen 0
-incoming.flushImpl = proc(stream: PStream) =
-  #echo("Flushing incoming")
-  stream.setPosition(0)
-  PStringStream(stream).data.setLen(0)
-
-proc sendChat*(text: string) =
-  var pkt = newCsChat(text = text)
-  activeServer.writePkt HChat, pkt
 proc zoneListReq() =
   var pkt = newCsZonelist("sup")
   writePkt HZonelist, pkt
@@ -105,102 +143,9 @@ keyClient.registerHandler(MouseRight, down, proc() =
   mptext.setPosition(p)
   mptext.setString("($1,$2)"%[$p.x.int,$p.y.int]))
 
-proc dispChat(kind: ChatType, text: string, fromPlayer: string = "") = 
-  var m = messageArea.add(
-    if fromPlayer == "": text
-    else: "<$1> $2" % [fromPlayer, text])
-  case kind
-  of CPub: m.setColor(RoyalBlue)
-  of CSystem: m.setColor(Green)
-  else: m.setColor(Red)
-proc dispChat(msg: ScChat) {.inline.} =
-  dispChat(msg.kind, msg.text, msg.fromPlayer)
-
-proc setActiveZone(ind: int; zone: ScZoneRecord) =
-  #hilight it or something
-  dispmessage("Selected " & zone.name)
   
-  
-proc setConnected(state: bool) =
-  if state:
-    bConnected = true
-    for b in connectionButtons: enable(b)
-  else:
-    bConnected = false
-    for b in connectionButtons: disable(b)
-
-var incomingHandlers = initTable[char, proc(s: PStream)](16)
-incomingHandlers[HHello] = proc(s: PStream) = 
-  let msg = readScHello(s)
-  dispChat(CSystem, msg.resp)
-  setConnected(true)
-incomingHandlers[HLogin] = proc(s: PStream) =
-  var info = readScLogin(s)
-  dispmessage("We logged in :>")
-incomingHandlers[HZonelist] = proc(s: PStream) =
-  var 
-    info = readScZonelist(s)
-    zones = info.zones
-  if zones.len > 0:
-    zonelist.clearButtons()
-    var pos = vec2f(0.0, 0.0)
-    zonelist.newButton(
-      text = "Zonelist - "& info.network,
-      position = pos,
-      onClick = proc(b: PButton) =
-        dispmessage("Click on header"))
-    pos.y += 20
-    for i in 0..zones.len - 1:
-      var z = zones[i]
-      zonelist.newButton(
-        text = z.name, position = pos,
-        onClick = proc(b: PButton) = 
-          setActiveZone(i, z))
-      pos.y += 20
-    showZonelist = true
-incomingHandlers[HPoing] = proc(s: PStream) = 
-  var ping = readPoing(s)
-  dispmessage("Ping: "& $ping.time)
-  ping.time = epochTime().float32
-  writePkt HPoing, ping
-incomingHandlers[HChat] = proc(s: PStream) =
-  var msg = readScChat(s)
-  dispChat(msg)
-
-incomingHandlers[HFileChallenge] = proc(s: PStream) =
-  var challenge = readScFileChallenge(s)
-  var path = "data"
-  case challenge.assetType
-  of FGraphics:
-    path.add "/gfx"
-  of FSound:
-    path.add "/sfx"
-  else: nil
-  
-  var resp: CsFileChallenge
-  if not existsFile(path / challenge.file):
-    resp.needFile = true
-  else:
-    resp.checksum = toMD5(readFile(path / challenge.file))
-  writePkt HFileChallenge, resp
-
 proc copyWith(t: PText, text: string): PText =
   result = t.copy()
-
-proc handlePkts(stream: PStream) =
-  var iters = 0
-  while not stream.atEnd:
-    iters += 1
-    var typ = readChar(stream)
-    if not incominghandlers.hasKey(typ):
-      echo("Unknown pkt ", repr(typ), '(', typ.ord,')')
-      echo(repr(PStringStream(stream).data))
-      break
-    else:
-      echo("Pkt ", typ)
-      echo(repr(PStringStream(stream).data))
-      incominghandlers[typ](stream)
-  echo("handlePkts finished after ", iters, " iterations")
 
 proc connectZone(host: string, port: TPort) =
   if zone.isNil:
@@ -210,41 +155,6 @@ proc connectZone(host: string, port: TPort) =
   var hello = newCsHello()
   zone.writePkt HHello, hello
 
-
-proc pollDirserver(timeout: int): bool =
-  if dirServer.isNil: return
-  var ws = @[dirServer]
-
-proc flush*(serv: PServer) =
-  if serv.outgoing.getPosition > 0:
-    let res = serv.sock.sendAsync(serv.outgoing.data)
-    echo "send res: ", res
-    serv.outgoing.flush()
-
-const ChunkSize = 512
-proc pollServer(s: PServer; timeout: int): bool =
-  if s.isNil or s.sock.isNil: return true
-  var
-    ws = @[s.sock]
-    rs = @[s.sock]
-  if select(rs, timeout).bool:
-    var recvd = 0
-    while true:
-      let pos = incoming.data.len
-      setLen(incoming.data, pos + ChunkSize)
-      #let res = client.recvAsync(incoming.data)
-      let res = s.sock.recv(addr incoming.data[pos], ChunkSize)
-      echo("Read ", res)
-      if res > 0:
-        if res < ChunkSize:
-          incoming.data.setLen(incoming.data.len - (ChunkSize - res))
-          break
-      else: break
-    handlePkts(incoming)
-    incoming.flush()
-  if selectWrite(ws, timeout).bool:
-    s.flush()
-  result = true
 
 proc lobbyReady*() = 
   keyClient.setActive()
@@ -278,7 +188,7 @@ proc getClientSettings*(): TClientSettings =
 
 proc lobbyInit*() =
   var s = json.parseFile("./client_settings.json")
-  clientSettings.offlineFile = "zones/"
+  clientSettings.offlineFile = "data/"
   clientSettings.offlineFile.add s["default-file"].str
   let dirserv = s["directory-server"]
   clientSettings.dirserver.host = dirserv["host"].str
@@ -322,7 +232,7 @@ proc lobbyInit*() =
       writePkt HChat, pkt),
     startEnabled = false))
   chatInput = gui.newTextEntry("...", vec2f(10.0, 575.0), proc() =
-    sendChat(chatInput.getText())
+    sendChat dirServer, chatInput.getText()
     chatInput.clearText())
   messageArea = gui.newMessageArea(vec2f(10.0, 575.0 - 20.0))
 
@@ -337,7 +247,6 @@ proc lobbyUpdate*(dt: float) =
     setConnected(false)
     echo("Lost connection")
   discard pollServer(zone, 10)
-    
 
 proc lobbyDraw*(window: PRenderWindow) =
   window.clear(Black)
