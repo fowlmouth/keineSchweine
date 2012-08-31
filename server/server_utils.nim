@@ -71,6 +71,12 @@ proc send*[T](client: PClient; pktType: char; pkt: var T) =
   client.outputBuf.write(pktType)
   pkt.pack(client.outputBuf)
 
+proc sendMessage(client: PClient; txt: string) =
+  var m = newScChat(CSystem, text = txt)
+  client.send HChat, m
+proc sendError*(client: PClient; txt: string) =
+  var m = newScChat(CError, text = txt)
+  client.send HChat, m
 
 proc checksumFile*(filename: string): TChecksumFile =
   let fullText = readFile(filename)

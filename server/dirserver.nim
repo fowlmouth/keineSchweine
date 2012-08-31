@@ -33,18 +33,16 @@ proc sendZoneList(client: PClient) =
 proc forwardPrivate(rcv: PClient; sender: PClient; txt: string) =
   var m = newScChat(CPriv, sender.alias, txt)
   rcv.send(HChat, m)
-proc sendMessage(client: PClient; txt: string) =
-  echo(">> sys msg ", client)
-  var m = newScChat(CSystem, "", txt)
-  client.send(HChat, m)
 proc sendChat(client: PClient; kind: ChatType; txt: string) =
   echo(">> chat ", client)
   var m = newScChat(kind, "", txt)
   client.send(HChat, m)
-proc sendError(client: PClient; txt: string) {.inline.} =
-  sendChat(client, CError, txt)
+
 
 proc loginPlayer(client: PClient; login: CsLogin): bool =
+  if client.auth:
+    client.sendError("You are already logged in.")
+    return
   if alias2client.hasKey(login.alias):
     client.sendError("Alias in use.")
     return

@@ -110,6 +110,11 @@ proc loadAllGraphics*() =
 proc getLevelSettings*(): PLevelSettings =
   result = cfg.levelSettings
 
+iterator playableVehicles*(): PVehicleRecord =
+  for v in cfg.vehicles.items():
+    if v.playable:
+      yield v
+
 proc newSprite*(filename: string): PSpriteSheet =
   if hasKey(SpriteSheets, filename):
     return SpriteSheets[filename]

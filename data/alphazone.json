@@ -8,7 +8,7 @@
    "thrust":400,
    "top_speed":800,
    "reverse":250,
-   "rotation":2500},
+   "rotation":4000},
   "physics":{
    "mass":4,
    "radius":23},

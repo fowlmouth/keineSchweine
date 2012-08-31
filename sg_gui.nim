@@ -1,6 +1,6 @@
 import
-  sfml, sfml_vector, sfml_colors,
-  input_helpers
+  sfml, sfml_vector, sfml_colors, 
+  input_helpers, sg_packets
 {.deadCodeElim: on.}
 type
   PGuiContainer* = ref TGuiContainer
@@ -26,7 +26,13 @@ type
   PMessageArea* = ref TMessageArea
   TMessageArea* = object of TGuiObject
     pos: TVector2f
-    messages: seq[PText]
+    messages: seq[TMessage]
+    texts: seq[PText]
+    scrollBack: int
+    sizeVisible: int
+  TMessage = object
+    color: TColor
+    text: string
   TButtonClicked = proc(button: PButton)
 var
   guiFont* = newFont("data/fnt/LiberationMono-Regular.ttf")
@@ -45,7 +51,7 @@ proc update*(container: PGuiContainer; dt: float)
 proc draw*(window: PRenderWindow; container: PGuiContainer) {.inline.}
 
 proc newMessageArea*(container: PGuiContainer; position: TVector2f): PMessageArea {.discardable.}
-proc add*(m: PMessageArea; text: string): PText {.discardable.}
+proc add*(m: PMessageArea; msg: ScChat)
 
 proc draw*(window: PRenderWindow; b: PButton) {.inline.}
 proc click*(b: PButton; p: TVector2f)
@@ -65,10 +71,6 @@ proc draw*(window: PRenderWindow, t: PTextEntry) {.inline.}
 proc setActive*(t: PTextEntry) {.inline.}
 proc clearText*(t: PTextEntry) {.inline.}
 proc getText*(t: PTextEntry): string {.inline.}
-
-template containerWrapper(procname: expr; args: expr): stmt {.immediate.} =
-  result = procname(args)
-  add(container, result)
 
 if guiFont == nil:
   echo("Could not load font, crying softly to myself.")
@@ -173,7 +175,7 @@ proc setActive*(t: PTextEntry) =
     input_helpers.setActive(t.inputClient)
 
 
-proc newMessageArea*(container: PGuiContainer; position: TVector2f): PMessageArea =
+discard """proc newMessageArea*(container: PGuiContainer; position: TVector2f): PMessageArea =
   new(result)
   result.messages = @[]
   result.pos = position
@@ -193,5 +195,57 @@ proc draw*(window: PRenderWindow; m: PMessageArea) =
   if nmsgs == 0: return
   for i in countdown(nmsgs - 1, max(nmsgs - 30, 0)):
     window.draw(m.messages[i])
+"""
+proc newMessageArea*(container: PGuiContainer; position: TVector2f): PMessageArea =
+  new(result)
+  result.messages = @[]
+  result.texts = @[]
+  result.pos = position + container.position
+  result.sizeVisible = 10
+  result.scrollBack = 0
+  container.add(result)
+proc add*(m: PMessageArea, msg: ScChat) =
+  const prependName = {CPub, CPriv}
+  var mmm: TMessage
+  if msg.kind in prependName: 
+    mmm.text = "<"
+    mmm.text.add msg.fromPlayer
+    mmm.text.add "> "
+    mmm.text.add msg.text
+  else:
+    mmm.text = msg.text
+  case msg.kind
+  of CPub:  mmm.color = RoyalBlue
+  of CPriv, CSystem: mmm.color = Green
+  of CError: mmm.color = Red
+  
+  m.messages.add mmm
+proc add*(m: PMessageArea, msg: string) =
+  var chat = newScChat(kind = CSystem, text = msg)
+  add(m, chat)
 
+proc proctor*(m: PText; msg: ptr TMessage; pos: ptr TVector2f) =
+  m.setString msg.text 
+  m.setColor msg.color
+  m.setPosition pos[]
+proc update*(m: PMessageArea) =
+  if m.texts.len < m.sizeVisible:
+    for i in 1..m.sizeVisible - m.texts.len:
+      var t = messageProto.copy()
+      m.texts.add messageProto.copy()
+  elif m.texts.len > m.sizeVisible:
+    for i in m.sizeVisible.. < m.texts.len:
+      m.texts.pop().destroy()
+  let nmsgs = m.messages.len()
+  if m.sizeVisible == 0 or nmsgs == 0: return
+  var pos = vec2f(m.pos.x, m.pos.y)
+  for i in 1.. min(m.sizeVisible, nmsgs)-1:
+    proctor(m.texts[i - 1], addr m.messages[nmsgs - i - m.scrollBack], addr pos)
+    pos.y -= 16.0
+
+proc draw*(window: PRenderWindow; m: PMessageArea) =
+  let nmsgs = len(m.texts)
+  if nmsgs == 0: return
+  for i in countdown(nmsgs - 1, max(nmsgs - m.sizeVisible, 0)):
+    window.draw m.texts[i]
 

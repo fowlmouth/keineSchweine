@@ -26,13 +26,17 @@ proc findClient*(host: string; port: int16): PClient =
   clients[addy] = result
   allClients.add(result)
 
-proc setAlias(client: PClient; newName: string): bool =
-  if alias2client.hasKey(newName):
+proc loginPlayer(client: PClient; login: CsLogin): bool =
+  if client.auth:
+    client.sendError("You are already logged in.")
     return
-  if alias2client.hasKey(client.alias):
-    alias2client.del(client.alias)
-  client.alias = newName
-  alias2client[newName] = client
+  if alias2client.hasKey(login.alias):
+    client.sendError("Alias in use.")
+    return
+  client.auth = true
+  client.kind = CPlayer
+  client.alias = login.alias
+  alias2client[client.alias] = client
   result = true
 
 proc sendZoneList(client: PClient) = 
@@ -71,15 +75,9 @@ handlers[HHello] = (proc(client: PClient; stream: PStream) =
 handlers[HLogin] = proc(client: PClient; stream: PStream) =
   var loginInfo = readCsLogin(stream)
   echo("** login: alias = ", loginInfo.alias)
-  if client.auth:
-    client.sendError("You are already logged in.")
-  else:
-    if client.setAlias(loginInfo.alias):
-      client.auth = true
-      client.sendMessage("Welcome "& client.alias)
-      client.sendZonelist()
-    else:
-      client.sendError("Invalid alias")
+  if client.login(loginInfo):
+    client.sendMessage("Welcome "& client.alias)
+    client.sendZonelist()
 handlers[HZoneList] = proc(client: PClient; stream: PStream) =
   var pinfo = readCsZoneList(stream)
   echo("** zonelist req")

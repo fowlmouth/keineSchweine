@@ -33,7 +33,8 @@ var
 template dispmessage(m: expr): stmt = 
   messageArea.add(m)
 
-proc writePkt[T](pid: PacketID; p: var T) {.inline.} =
+
+proc writePkt[T](pid: PacketID; p: var T) =
   if activeServer.isNil: return
   activeServer.writePkt pid, p
 
@@ -49,28 +50,17 @@ proc setActiveZone(ind: int; zone: ScZoneRecord) =
   #hilight it or something
   dispmessage("Selected " & zone.name)
 
-proc dispChat(kind: ChatType, text: string, fromPlayer: string = "") = 
-  var m = messageArea.add(
-    if fromPlayer == "": text
-    else: "<$1> $2" % [fromPlayer, text])
-  case kind
-  of CPub: m.setColor(RoyalBlue)
-  of CSystem: m.setColor(Green)
-  else: m.setColor(Red)
-proc dispChat(msg: ScChat) {.inline.} =
-  dispChat(msg.kind, msg.text, msg.fromPlayer)
-
 
 proc connectToDirserv() =
   if dirServer.isNil:
     dirServer = newServerConnection(clientSettings.dirserver.host, clientSettings.dirserver.port)
     dirServer.handlers[HHello] = proc(serv: PServer; s: PStream) = 
       let msg = readScHello(s)
-      dispChat(CSystem, msg.resp)
+      dispMessage(msg.resp)
       setConnected(true)
     dirServer.handlers[HLogin] = proc(serv: PServer; s: PStream) =
       var info = readScLogin(s)
-      dispmessage("We logged in :>")
+      ##do something here
     dirServer.handlers[HZonelist] = proc(serv: PServer; s: PStream) =
       var 
         info = readScZonelist(s)
@@ -99,7 +89,7 @@ proc connectToDirserv() =
       serv.writePkt HPoing, ping
     dirServer.handlers[HChat] = proc(serv: PServer; s: PStream) =
       var msg = readScChat(s)
-      dispChat(msg)
+      messageArea.add(msg)
     dirServer.handlers[HFileChallenge] = proc(serv: PServer; s: PStream) =
       var challenge = readScFileChallenge(s)
       var path = "data"
@@ -247,6 +237,7 @@ proc lobbyUpdate*(dt: float) =
     setConnected(false)
     echo("Lost connection")
   discard pollServer(zone, 10)
+  messageArea.update()
 
 proc lobbyDraw*(window: PRenderWindow) =
   window.clear(Black)

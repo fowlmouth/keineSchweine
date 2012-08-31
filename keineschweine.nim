@@ -30,7 +30,7 @@ const
   TAU = PI * 2.0
   TenDegrees = 10.0 * PI / 180.0
   ##temporary constants
-  W_LIMIT = 0.9
+  W_LIMIT = 2.3
   V_LIMIT = 35
   MaxLocalBots = 3
 var
@@ -53,6 +53,7 @@ var
   specGui = newGuiContainer()
   stars: seq[PSpriteSheet] = @[]
   playBtn: PButton
+  shipSelect = newGuiContainer()
 when defined(foo):
   var mouseSprite: sfml.PCircleShape
 
@@ -71,12 +72,28 @@ proc initLevel() =
   let levelSettings = getLevelSettings()
   levelArea.width = levelSettings.size.x
   levelArea.height= levelSettings.size.y
+  let borderSeq = @[
+    vector(0, 0), vector(levelArea.width.float, 0.0),
+    vector(levelArea.width.float, levelArea.height.float), vector(0.0, levelArea.height.float)]
+  for i in 0..3:
+    var seg = space.addShape(
+      newSegmentShape(
+        space.staticBody, 
+        borderSeq[i], 
+        borderSeq[(i + 1) mod 4],
+        2.3))
+    seg.setElasticity 0.96
   if levelSettings.starfield.len > 0:
     showStars = true
     for sprite in levelSettings.starfield:
       sprite.tex.setRepeated(true)
       sprite.sprite.setTextureRect(levelArea)
       stars.add(sprite)
+  var pos = vec2f(0.0, 0.0)
+  for veh in playableVehicles():
+    shipSelect.newButton(veh.name, position = pos, onClick = proc(b: PButton) = echo "-__-")
+    pos.y += 18.0
+  
 
 when defined(showFPS):
   var fpsText = newNameTag("0")
@@ -103,10 +120,10 @@ proc free*(veh: PVehicle) =
   veh.shape  = nil
 
 
-proc angularDampingSim*(body: PBody, gravity: TVector, damping: CpFloat; dt: CpFloat){.cdecl.} =
-  let angVel = body.getAngVel()
-  body.setAngVel angVel - (angVel * 0.98 * dt)
+proc angularDampingSim(body: PBody, gravity: TVector, damping: CpFloat; dt: CpFloat){.cdecl.} =
+  body.w -= (body.w * 0.98 * dt) 
   body.updateVelocity(gravity, damping, dt)
+
 proc newVehicle*(veh: string): PVehicle =
   var v = fetchVeh(veh)
   if not v.playable:
@@ -115,9 +132,6 @@ proc newVehicle*(veh: string): PVehicle =
   echo("Creating "& veh)
   new(result, free)
   result.record = v
-  #result.angle = 0.0
-  #result.position = vec2f(50.0, 50.0)
-  #result.velocity = vec2f(0.0,  0.0)
   result.sprite = result.record.anim.spriteSheet.sprite.copy()
   result.sprite.setOrigin(vec2f(v.anim.spriteSheet.framew / 2, v.anim.spriteSheet.frameh / 2))
   result.spriteRect = result.sprite.getTextureRect()
@@ -272,7 +286,12 @@ proc mouseToSpace*(): TVector =
   result = pos.sfml2cp()
   #result = getMousePos().sfml2cp
 
-ingameClient.registerHandler(KeyF11, down, proc() = toggleSpec())
+var showShipSelect = false
+proc toggleShipSelect() = 
+  showShipSelect = not showShipSelect
+
+ingameClient.registerHandler(KeyF12, down, proc() = toggleSpec())
+ingameClient.registerHandler(KeyF11, down, toggleShipSelect)
 when defined(DebugKeys):
   ingameClient.registerHandler(KeyRShift, down, proc() =
     if keyPressed(KeyR):
@@ -285,7 +304,9 @@ when defined(DebugKeys):
       echo(repr(activeVehicle.record))
     elif keyPressed(KeyH):
       activeVehicle.body.setPos(vector(100.0, 100.0))
-      activeVehicle.body.setVel(vectorZero))
+      activeVehicle.body.setVel(vectorZero)
+    elif keyPressed(KeyComma):
+      activeVehicle.body.setPos mouseToSpace())
   ingameClient.registerHandler(KeyY, down, proc() =
     const objects = ["Asteroid1", "Asteroid2"]
     addObject(objects[random(objects.len)]))
@@ -312,6 +333,7 @@ when defined(DebugKeys):
 
 var specCameraSpeed = 5.0
 specInputClient.registerHandler(MouseLeft, down, proc() = specGui.click(getMousePos()))
+specInputClient.registerHandler(KeyF11, down, toggleShipSelect)
 specInputClient.registerHandler(KeyF11, down, proc() = toggleSpec())
 specInputClient.registerHandler(KeyLShift, down, proc() = specCameraSpeed *= 2)
 specInputClient.registerHandler(KeyLShift, up, proc() = specCameraSpeed /= 2)
@@ -403,6 +425,7 @@ proc render() =
     window.draw(fpsText)
   if localPlayer.spectator:
     window.draw(specGui)
+  if showShipSelect: window.draw shipSelect
   window.display()
 
 proc `$`*(a: TKeyEvent): string =
@@ -422,6 +445,7 @@ when isMainModule:
   
   worldView = window.getView.copy()
   guiView = worldView.copy()
+  shipSelect.setPosition vec2f(665.0, 50.0)
   
   when defined(foo):
     mouseSprite = sfml.newCircleShape(14)
