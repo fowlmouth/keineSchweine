@@ -67,7 +67,7 @@ type
     Lobby, Transitioning, Field
 var 
   cfg: PZoneSettings
-  SpriteSheets = initTable[string, PSpriteSheet](64)
+  SpriteSheets* = initTable[string, PSpriteSheet](64)
   nameToVehID*: TTable[string, int]
   nameToItemID*: TTable[string, int]
   nameToObjID*: TTable[string, int]

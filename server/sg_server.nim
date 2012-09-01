@@ -3,13 +3,14 @@ import
   sg_packets, sg_assets, md5, server_utils, client_helpers
 type
   THandler = proc(client: PCLient; stream: PStream)
+  FileChallengePair = tuple[challenge: ScFileChallenge; file: TChecksumFile]
 var
   server: TSocket
   dirServer: PServer
   handlers = initTable[char, THandler](16)
   thisZone = newScZoneRecord("local", "sup")
   thisZoneSettings: PZoneSettings
-  zoneSettings: TChecksumFile
+  myAssets: seq[FileChallengePair] = @[]
   ## I was high.
   clients = initTable[TupAddress, PClient](16)
   alias2client = initTable[string, PClient](32)
@@ -26,18 +27,6 @@ proc findClient*(host: string; port: int16): PClient =
   clients[addy] = result
   allClients.add(result)
 
-proc loginPlayer(client: PClient; login: CsLogin): bool =
-  if client.auth:
-    client.sendError("You are already logged in.")
-    return
-  if alias2client.hasKey(login.alias):
-    client.sendError("Alias in use.")
-    return
-  client.auth = true
-  client.kind = CPlayer
-  client.alias = login.alias
-  alias2client[client.alias] = client
-  result = true
 
 proc sendZoneList(client: PClient) = 
   echo(">> zonelist ", client)
@@ -46,16 +35,10 @@ proc sendZoneList(client: PClient) =
 proc forwardPrivate(rcv: PClient; sender: PClient; txt: string) =
   var m = newScChat(CPriv, sender.alias, txt)
   rcv.send(HChat, m)
-proc sendMessage(client: PClient; txt: string) =
-  echo(">> sys msg ", client)
-  var m = newScChat(CSystem, "", txt)
-  client.send(HChat, m)
 proc sendChat(client: PClient; kind: ChatType; txt: string) =
   echo(">> chat ", client)
   var m = newScChat(kind, "", txt)
   client.send(HChat, m)
-proc sendError(client: PClient; txt: string) {.inline.} =
-  sendChat(client, CError, txt)
 
 var pubChatQueue = newStringStream("")
 pubChatQueue.flushImpl = proc(stream: PStream) =
@@ -66,7 +49,6 @@ proc queuePub(sender: string, msg: CsChat) =
   pubChatQueue.write(HChat)
   chat.pack(pubChatQueue)
 
-template dont(e: expr): stmt {.immediate.} = nil
 handlers[HHello] = (proc(client: PClient; stream: PStream) =
   var h = readCsHello(stream)
   if h.i == 14:
@@ -75,8 +57,9 @@ handlers[HHello] = (proc(client: PClient; stream: PStream) =
 handlers[HLogin] = proc(client: PClient; stream: PStream) =
   var loginInfo = readCsLogin(stream)
   echo("** login: alias = ", loginInfo.alias)
-  if client.login(loginInfo):
+  if client.loginPlayer(loginInfo):
     client.sendMessage("Welcome "& client.alias)
+    alias2client[client.alias] = client
     client.sendZonelist()
 handlers[HZoneList] = proc(client: PClient; stream: PStream) =
   var pinfo = readCsZoneList(stream)
@@ -97,13 +80,15 @@ handlers[HZoneQuery] = proc(client: PClient; stream: PStream) =
   var resp = newScZoneQuery(zonePlayers.len.uint16)
   client.send(HZoneQuery, resp)
 
+type TFileChallenge = object
+  pos: int 
+var fileChallenges = initTable[uint16, TFileChallenge](32)
+
+
 handlers[HZoneJoinReq] = proc(client: PClient; stream: PStream) =
   #var joinreq = readCsZoneJoinReq(stream)
   echo "Join zone request from ", client
   
-type TFileChallenge = object
-  filename: string
-var fileChallenges = initTable[int16, TFileChallenge](32)
 handlers[HFileChallenge] = proc(client: PClient; stream: PStream) =
   var fcResp = readCsFileChallenge(stream)
   if fcResp.needFile:
@@ -150,8 +135,7 @@ proc poll*(timeout: int = 250) =
       handlePkt(client, line)
   if selectWrite(writes, timeout) > 0:
     let nclients = allClients.len
-    if nclients == 0: 
-      stdout.write(".")
+    if nclients == 0:
       return
     clientIndex = (clientIndex + 1) mod nclients
     var c = allClients[clientIndex]
@@ -191,15 +175,34 @@ when isMainModule:
   
   
   setCurrentDir getAppDir().parentDir()
-  let zonesettingss = readFile(path)
   block:
+    let zonesettings = readFile(path)
     var 
       errors: seq[string] = @[]
-    if not loadSettings(zoneSettingss, errors):
+    if not loadSettings(zoneSettings, errors):
       echo("You have errors in your zone settings:")
       for e in errors: echo("**", e)
       quit(1)
-  zoneSettings = checksumStr(zoneSettingsS)
+    
+    var pair: FileChallengePair
+    pair.challenge.file = zoneFile
+    pair.challenge.assetType = FZoneCfg
+    pair.file = checksumStr(zoneSettings)
+    myAssets.add pair
+  
+  for file, s in SpriteSheets.pairs():
+    if not s.load():
+      echo "Invalid or missing file"
+      echo repr(s)
+      quit 1
+    else:
+      var pair: FileChallengePair
+      pair.challenge.file = file 
+      pair.challenge.assetType = FGraphics
+      pair.file = s.contents
+      myAssets.add pair
+  
+  echo "Zone has ", myAssets.len, " associated assets"
   
   thisZone.name = jsonSettings["name"].str
   thisZone.desc = jsonSettings["desc"].str
@@ -214,6 +217,7 @@ when isMainModule:
     var m = readDsMsg(stream)
     echo("DirServer> ", m.msg)
   dirServer.writePkt HZoneLogin, login
+  
   
   createServer(port)
   echo("Listening on port ", port, "...")

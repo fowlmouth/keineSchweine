@@ -3,7 +3,7 @@
 
 import
   sockets, times, streams, streams_enh, tables, json, os,
-  sg_packets, sg_assets, md5, server_utils
+  sg_packets, sg_assets, md5, server_utils, map_filter
 type
   THandler = proc(client: PCLient; stream: PStream)
 var
@@ -27,6 +27,16 @@ proc findClient*(host: string; port: int16): PClient =
   clients[addy] = result
   allClients.add(result)
 
+proc loginZone(client: PClient; login: SdZoneLogin): bool =
+  if not client.auth:
+    for s in zoneSlots.items:
+      if s.name == login.name and s.key == login.key:
+        client.auth = true
+        client.kind = CServer
+        client.record = login.record
+        result = true
+        break
+
 proc sendZoneList(client: PClient) = 
   echo(">> zonelist ", client)
   client.send(HZonelist, zonelist)
@@ -39,27 +49,6 @@ proc sendChat(client: PClient; kind: ChatType; txt: string) =
   client.send(HChat, m)
 
 
-proc loginPlayer(client: PClient; login: CsLogin): bool =
-  if client.auth:
-    client.sendError("You are already logged in.")
-    return
-  if alias2client.hasKey(login.alias):
-    client.sendError("Alias in use.")
-    return
-  client.auth = true
-  client.kind = CPlayer
-  client.alias = login.alias
-  alias2client[client.alias] = client
-  result = true
-proc loginZone(client: PClient; login: SdZoneLogin): bool =
-  if not client.auth:
-    for s in zoneSlots.items:
-      if s.name == login.name and s.key == login.key:
-        client.auth = true
-        client.kind = CServer
-        client.record = login.record
-        result = true
-        break
 
 var pubChatQueue = newStringStream("")
 pubChatQueue.flushImpl = proc(stream: PStream) =
@@ -70,7 +59,6 @@ proc queuePub(sender: string, msg: CsChat) =
   pubChatQueue.write(HChat)
   chat.pack(pubChatQueue)
 
-template dont(e: expr): stmt {.immediate.} = nil
 handlers[HHello] = (proc(client: PClient; stream: PStream) =
   var h = readCsHello(stream)
   if h.i == 14:
@@ -79,12 +67,14 @@ handlers[HHello] = (proc(client: PClient; stream: PStream) =
 handlers[HLogin] = proc(client: PClient; stream: PStream) =
   var loginInfo = readCsLogin(stream)
   echo("** login: alias = ", loginInfo.alias)
-  if client.auth:
-    client.sendError("You are already logged in.")
-  else:
-    if client.loginPlayer(loginInfo):
-      client.sendMessage("Welcome "& client.alias)
-      client.sendZonelist()
+  if alias2client.hasKey(loginInfo.alias):
+    client.sendError("Alias in use.")
+    return
+  if client.loginPlayer(loginInfo):
+    alias2client[client.alias] = client
+    client.sendMessage("Welcome "& client.alias)
+    client.sendZonelist()
+
 handlers[HZoneList] = proc(client: PClient; stream: PStream) =
   var pinfo = readCsZoneList(stream)
   echo("** zonelist req")
@@ -109,7 +99,14 @@ handlers[HZoneLogin] = proc(client: PClient; stream: PStream) =
     client.sendServMsg "Invalid login"
   else:
     client.sendServMsg "Welcome to the servers"
+    zones.add client
+    zonelist.zones.add client.record
 
+
+handlers[HFileChallenge] = proc(client: PClient; stream: PStream) =
+  if client.auth:
+    if client.kind == CServer:
+      var chg = readScFileChallenge(stream)
 
 proc handlePkt(s: PClient; stream: PStream) =
   while not stream.atEnd:  
@@ -147,8 +144,7 @@ proc poll*(timeout: int = 250) =
       handlePkt(client, line)
   if selectWrite(writes, timeout) > 0:
     let nclients = allClients.len
-    if nclients == 0: 
-      stdout.write(".")
+    if nclients == 0:
       return
     clientIndex = (clientIndex + 1) mod nclients
     var c = allClients[clientIndex]
@@ -191,7 +187,14 @@ when isMainModule:
       if pubChatQueue.getPosition > 0:
         var cn = 0
         let sizePubChat = pubChatQueue.data.len
-        for c in allClients:
-          c.outputBuf.writeData(addr pubChatQueue.data[0], sizePubChat)
+        var sent = 0
+        filterIt2(allClients, it.auth == true and it.kind == CPlayer):
+          it.outputBuf.writeData(addr pubChatQueue.data[0], sizePubChat)
+          sent += 1
+        #for c in allClients:
+        #  c.outputBuf.writeData(addr pubChatQueue.data[0], sizePubChat)
         pubChatQueue.flush()
+        echo "pubChatQueue flushed to ", sent, "clients"
+      else:
+        echo "No pub chat"
 

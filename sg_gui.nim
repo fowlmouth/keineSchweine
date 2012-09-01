@@ -72,6 +72,8 @@ proc setActive*(t: PTextEntry) {.inline.}
 proc clearText*(t: PTextEntry) {.inline.}
 proc getText*(t: PTextEntry): string {.inline.}
 
+proc update*(m: PMessageArea)
+
 if guiFont == nil:
   echo("Could not load font, crying softly to myself.")
   quit(1)
@@ -220,7 +222,8 @@ proc add*(m: PMessageArea, msg: ScChat) =
   of CError: mmm.color = Red
   
   m.messages.add mmm
-proc add*(m: PMessageArea, msg: string) =
+  update m
+proc add*(m: PMessageArea, msg: string) {.inline.} =
   var chat = newScChat(kind = CSystem, text = msg)
   add(m, chat)
 
@@ -230,18 +233,26 @@ proc proctor*(m: PText; msg: ptr TMessage; pos: ptr TVector2f) =
   m.setPosition pos[]
 proc update*(m: PMessageArea) =
   if m.texts.len < m.sizeVisible:
+    echo "adding ", m.sizeVisible - m.texts.len, " fields"
     for i in 1..m.sizeVisible - m.texts.len:
       var t = messageProto.copy()
       m.texts.add messageProto.copy()
   elif m.texts.len > m.sizeVisible:
+    echo "cutting ", m.texts.len - m.sizeVisible, " fields"
     for i in m.sizeVisible.. < m.texts.len:
       m.texts.pop().destroy()
   let nmsgs = m.messages.len()
-  if m.sizeVisible == 0 or nmsgs == 0: return
+  if m.sizeVisible == 0 or nmsgs == 0: 
+    echo "no messages? ", m.sizeVisible, ", ", nmsgs
+    return
   var pos = vec2f(m.pos.x, m.pos.y)
-  for i in 1.. min(m.sizeVisible, nmsgs)-1:
-    proctor(m.texts[i - 1], addr m.messages[nmsgs - i - m.scrollBack], addr pos)
+  var iters = 0
+  for i in 0.. min(m.sizeVisible, nmsgs)-1:
+    echo nmsgs - i - 1 - m.scrollBack
+    proctor(m.texts[i], addr m.messages[nmsgs - i - 1 - m.scrollBack], addr pos)
     pos.y -= 16.0
+    iters += 1
+  echo "update ran for ", iters, " iters"
 
 proc draw*(window: PRenderWindow; m: PMessageArea) =
   let nmsgs = len(m.texts)

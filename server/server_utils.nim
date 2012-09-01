@@ -29,6 +29,8 @@ type
     freeIDs: seq[T]
 var cliID: PIDGen[uint16]
 
+proc sendMessage*(client: PClient; txt: string)
+proc sendError*(client: PClient; txt: string)
 
 #proc free[T](idg: PIDgen[T]) = 
 #  result.freeIDs = nil
@@ -61,6 +63,15 @@ proc newClient*(addy: TupAddress): PClient =
     stream.setPosition 0
     PStringStream(stream).data.setLen 0
 
+proc loginPlayer*(client: PClient; login: CsLogin): bool =
+  if client.auth:
+    client.sendError("You are already logged in.")
+    return
+  client.auth = true
+  client.kind = CPlayer
+  client.alias = login.alias
+  result = true
+
 proc `$`*(client: PClient): string =
   if not client.auth: return $client.addy
   case client.kind
@@ -71,7 +82,7 @@ proc send*[T](client: PClient; pktType: char; pkt: var T) =
   client.outputBuf.write(pktType)
   pkt.pack(client.outputBuf)
 
-proc sendMessage(client: PClient; txt: string) =
+proc sendMessage*(client: PClient; txt: string) =
   var m = newScChat(CSystem, text = txt)
   client.send HChat, m
 proc sendError*(client: PClient; txt: string) =
@@ -89,6 +100,12 @@ proc checksumStr*(str: string): TChecksumFile =
   result.compressed = compress(str)
 
 cliID = newIDGen[uint16]()#[uint16]()
+
+when isMainModule:
+  echo cliID.next()
+  echo cliID.next()
+  echo cliID.next()
+  quit(0)
 
 discard """def validateAlias*(alias: string): bool =
   """

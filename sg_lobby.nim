@@ -32,7 +32,8 @@ var
 
 template dispmessage(m: expr): stmt = 
   messageArea.add(m)
-
+proc connectZone(host: string; port: TPort)
+proc connectToDirserv()
 
 proc writePkt[T](pid: PacketID; p: var T) =
   if activeServer.isNil: return
@@ -49,7 +50,27 @@ proc setConnected(state: bool) =
 proc setActiveZone(ind: int; zone: ScZoneRecord) =
   #hilight it or something
   dispmessage("Selected " & zone.name)
+  connectZone(zone.ip, zone.port)
 
+
+proc expandPath(fc: ScFileChallenge): string =
+  result = "data/"
+  case fc.assetType
+  of FGraphics: result.add "gfx/"
+  of FSound: result.add "sfx/"
+  else: nil
+  result.add fc.file
+
+proc handleFileChallenge(serv: PServer; s: PStream) =
+  var 
+    challenge = readScFileChallenge(s)
+    path = expandPath(challenge)
+    resp: CsFileChallenge
+  if not existsFile(path):
+    resp.needFile = true
+  else:
+    resp.checksum = toMD5(readFile(path))
+  serv.writePkt HFileChallenge, resp
 
 proc connectToDirserv() =
   if dirServer.isNil:
@@ -89,23 +110,9 @@ proc connectToDirserv() =
       serv.writePkt HPoing, ping
     dirServer.handlers[HChat] = proc(serv: PServer; s: PStream) =
       var msg = readScChat(s)
+      echo "Got chat!"
       messageArea.add(msg)
-    dirServer.handlers[HFileChallenge] = proc(serv: PServer; s: PStream) =
-      var challenge = readScFileChallenge(s)
-      var path = "data"
-      case challenge.assetType
-      of FGraphics:
-        path.add "/gfx"
-      of FSound:
-        path.add "/sfx"
-      else: nil
-      
-      var resp: CsFileChallenge
-      if not existsFile(path / challenge.file):
-        resp.needFile = true
-      else:
-        resp.checksum = toMD5(readFile(path / challenge.file))
-      serv.writePkt HFileChallenge, resp
+    dirServer.handlers[HFileChallenge] = handleFileChallenge
   var hello = newCsHello()
   dirServer.writePkt HHello, hello
   activeServer = dirServer
@@ -137,9 +144,11 @@ keyClient.registerHandler(MouseRight, down, proc() =
 proc copyWith(t: PText, text: string): PText =
   result = t.copy()
 
+
 proc connectZone(host: string, port: TPort) =
   if zone.isNil:
     zone = newServerConnection(host, port)
+    zone.handlers[HFileChallenge] = handleFileChallenge
   else:
     zone.sock.connect(host, port)
   var hello = newCsHello()
@@ -237,7 +246,6 @@ proc lobbyUpdate*(dt: float) =
     setConnected(false)
     echo("Lost connection")
   discard pollServer(zone, 10)
-  messageArea.update()
 
 proc lobbyDraw*(window: PRenderWindow) =
   window.clear(Black)
