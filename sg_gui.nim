@@ -28,8 +28,8 @@ type
     pos: TVector2f
     messages: seq[TMessage]
     texts: seq[PText]
-    scrollBack: int
-    sizeVisible: int
+    scrollBack*: int
+    sizeVisible*: int
   TMessage = object
     color: TColor
     text: string
@@ -246,13 +246,10 @@ proc update*(m: PMessageArea) =
     echo "no messages? ", m.sizeVisible, ", ", nmsgs
     return
   var pos = vec2f(m.pos.x, m.pos.y)
-  var iters = 0
   for i in 0.. min(m.sizeVisible, nmsgs)-1:
-    echo nmsgs - i - 1 - m.scrollBack
+    ##echo nmsgs - i - 1 - m.scrollBack
     proctor(m.texts[i], addr m.messages[nmsgs - i - 1 - m.scrollBack], addr pos)
     pos.y -= 16.0
-    iters += 1
-  echo "update ran for ", iters, " iters"
 
 proc draw*(window: PRenderWindow; m: PMessageArea) =
   let nmsgs = len(m.texts)

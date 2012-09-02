@@ -35,6 +35,7 @@ proc flush*(serv: PServer) =
   if serv.outgoing.getPosition > 0:
     let res = serv.sock.sendAsync(serv.outgoing.data)
     echo "send res: ", res
+    echo repr(serv.outgoing.data)
     serv.outgoing.flush()
 proc close*(s: PServer) =
   s.sock.close
@@ -44,7 +45,8 @@ proc writePkt*[T](serv: PServer; pid: PacketID, p: var T) =
   if serv.isNil: return
   serv.outgoing.write(pid)
   p.pack(serv.outgoing)
-
+proc send*[T](serv: PServer; pid: PacketID; p: var T) {.inline.} =
+  writePkt(serv, pid, p)
 
 proc sendChat*(serv: PServer; text: string) =
   var pkt = newCsChat(text = text)
@@ -68,7 +70,6 @@ proc pollServer*(s: PServer; timeout: int): bool =
     ws = @[s.sock]
     rs = @[s.sock]
   if select(rs, timeout).bool:
-    var recvd = 0
     while true:
       let pos = incoming.data.len
       setLen(incoming.data, pos + ChunkSize)

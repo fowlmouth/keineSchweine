@@ -14,6 +14,7 @@ type
     case kind*: TClientType
     of CPlayer:
       alias*: string
+      session*: string
     of CServer:
       record*: ScZoneRecord
       cfg*: TChecksumFile
@@ -31,6 +32,15 @@ var cliID: PIDGen[uint16]
 
 proc sendMessage*(client: PClient; txt: string)
 proc sendError*(client: PClient; txt: string)
+proc `$`*(client: PClient): string
+
+proc newIncomingBuffer*(size = 1024): PStringStream =
+  result = newStringStream("")
+  result.data.setLen size
+  result.data.setLen 0
+  result.flushImpl = proc(stream: PStream) =
+    stream.setPosition(0)
+    PStringStream(stream).data.setLen(0)
 
 #proc free[T](idg: PIDgen[T]) = 
 #  result.freeIDs = nil
@@ -51,13 +61,13 @@ proc del*[T](idg: PIDGen[T]; id: T) =
 
 
 proc free*(c: PClient) =
+  echo "Client freed: ", c
   cliID.del c.id
   c.outputBuf.flush()
   c.outputBuf = nil
 proc newClient*(addy: TupAddress): PClient =
   new(result, free)
   result.addy = addy
-  result.id = cliID.next()
   result.outputBuf = newStringStream("")
   result.outputBuf.flushImpl = proc(stream: PStream) = 
     stream.setPosition 0
@@ -67,9 +77,11 @@ proc loginPlayer*(client: PClient; login: CsLogin): bool =
   if client.auth:
     client.sendError("You are already logged in.")
     return
+  client.id = cliID.next()
   client.auth = true
   client.kind = CPlayer
   client.alias = login.alias
+  client.session = getMD5(client.alias & $rand(10000))
   result = true
 
 proc `$`*(client: PClient): string =

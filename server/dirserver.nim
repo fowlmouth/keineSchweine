@@ -50,10 +50,7 @@ proc sendChat(client: PClient; kind: ChatType; txt: string) =
 
 
 
-var pubChatQueue = newStringStream("")
-pubChatQueue.flushImpl = proc(stream: PStream) =
-  stream.setPosition(0)
-  PStringStream(stream).data.setLen(0)
+var pubChatQueue = newIncomingBuffer()
 proc queuePub(sender: string, msg: CsChat) =
   var chat = newScChat(kind = CPub, fromPlayer = sender, text = msg.text)
   pubChatQueue.write(HChat)
@@ -73,6 +70,8 @@ handlers[HLogin] = proc(client: PClient; stream: PStream) =
   if client.loginPlayer(loginInfo):
     alias2client[client.alias] = client
     client.sendMessage("Welcome "& client.alias)
+    var session = newScLogin(client.id, client.alias, client.session)
+    client.send HLogin, session
     client.sendZonelist()
 
 handlers[HZoneList] = proc(client: PClient; stream: PStream) =
@@ -124,6 +123,7 @@ proc createServer(port: TPort) =
 
 
 var clientIndex = 0
+var incoming = newIncomingBuffer()
 proc poll*(timeout: int = 250) =
   if server.isNil: return
   var 
@@ -133,15 +133,16 @@ proc poll*(timeout: int = 250) =
     var
       addy = ""
       port: TPort
-      line = newStringStream("")
-    let res = server.recvFromAsync(line.data, 512, addy, port, 0)
+    incoming.data.setLen 512
+    let res = server.recvFromAsync(incoming.data, 512, addy, port, 0)
     if not res:
       echo("No recv")
       return
     else:
       var client = findClient(addy, port.int16)
-      echo("<< ", res, " ", client, ": ", len(line.data), " ", repr(line.data))
-      handlePkt(client, line)
+      echo "<< ", res, " ", client, ": ", len(incoming.data), " ", repr(incoming.data)
+      handlePkt(client, incoming)
+    incoming.flush()
   if selectWrite(writes, timeout) > 0:
     let nclients = allClients.len
     if nclients == 0:
@@ -195,6 +196,4 @@ when isMainModule:
         #  c.outputBuf.writeData(addr pubChatQueue.data[0], sizePubChat)
         pubChatQueue.flush()
         echo "pubChatQueue flushed to ", sent, "clients"
-      else:
-        echo "No pub chat"
 

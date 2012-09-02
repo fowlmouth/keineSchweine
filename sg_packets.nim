@@ -12,8 +12,11 @@ forwardPacket(Uint16, int16)
 forwardPacket(TPort, int16)
 
 idPacket(Login, 'a',
-  tuple[id: int16],
+  tuple[id: uint16; alias: string; sessionKey: string],
   tuple[alias: string, passwd: string])
+
+let HZoneJoinReq* = 'j'
+defPacket(CsZoneJoinReq, tuple[session: ScLogin])
 
 defPacket(ScZoneRecord, tuple[
   name: string = "", desc: string = "",
@@ -28,7 +31,6 @@ defPacket(Poing, tuple[id: int32, time: float32])
 type ChatType* = enum
   CPub = 0'i8, CPriv, CSystem, CError
 forwardPacket(ChatType, int8)
-
 idPacket(Chat, 'C', 
   tuple[kind: ChatType = CPub; fromPlayer: string = ""; text: string = ""],
   tuple[target: string = ""; text: string = ""])
@@ -38,7 +40,7 @@ idPacket(Hello, 'h',
   tuple[i: int8 = 14])
 
 let HPlayerList* = 'P'
-defPacket(ScPlayerRec, tuple[id: int16; alias: string = ""])
+defPacket(ScPlayerRec, tuple[id: uint16; alias: string = ""])
 defPacket(ScPlayerList, tuple[players: seq[ScPlayerRec]])
 
 let HTeamList* = 'T'
@@ -56,20 +58,26 @@ forwardPacket(SpawnKind, int8)
 defPacket(ScSpawn, tuple[
   kind: SpawnKind; id: uint16; record: uint16; amount: uint16])
 
-let HZoneLogin* = 'u'
-defPacket(SdZoneLogin, tuple[name: string; key: string; record: ScZoneRecord])
-
 type TAssetType* = enum
   FZoneCfg = 1'i8, FGraphics, FSound 
 forwardPacket(TAssetType, int8)
 forwardPacket(MD5Digest, array[0..15, int8])
 idPacket(FileChallenge, 'F', 
-  tuple[file: string; assetType: TAssetType],
+  tuple[file: string; assetType: TAssetType; fullLen: int32],
   tuple[needfile: bool, checksum: MD5Digest])
 
-let HZoneJoinReq* = 'j'
+let HChallengeResult* = '('
+defPacket(ScChallengeResult, tuple[status: bool])
 
+let HFileTransfer* = 'f'
+defPacket(ScFileTransfer, tuple[fileSize: int32; pos: int32; data: string])
+defPacket(CsFilepartAck, tuple[lastpos: int32])
+
+##dir server messages
+let HZoneLogin* = 'u'
+defPacket(SdZoneLogin, tuple[name: string; key: string; record: ScZoneRecord])
+defPacket(DsZoneLogin, tuple[status: bool])
 let HDsMsg* = 'c'
 defPacket(DsMsg, tuple[msg: string])
-
-
+let HVerifyClient* = 'v'
+defPacket(SdVerifyClient, tuple[session: ScLogin])

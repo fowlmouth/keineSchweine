@@ -22,6 +22,7 @@ var
   showZonelist = false
   chatInput*: PTextEntry
   messageArea*: PMessageArea
+  mySession*: ScLogin
 var
   dirServer: PServer
   zone*: PServer
@@ -51,15 +52,70 @@ proc setActiveZone(ind: int; zone: ScZoneRecord) =
   #hilight it or something
   dispmessage("Selected " & zone.name)
   connectZone(zone.ip, zone.port)
+  playBtn.enable()
 
-
-proc expandPath(fc: ScFileChallenge): string =
+proc expandPath(kind: TAssetType; fileName: string): string =
   result = "data/"
-  case fc.assetType
+  case kind
   of FGraphics: result.add "gfx/"
-  of FSound: result.add "sfx/"
+  of FSound:    result.add "sfx/"
   else: nil
-  result.add fc.file
+  result.add fileName
+proc expandPath(fc: ScFileChallenge): string {.inline.} =
+  result = expandPath(fc.assetType, fc.file)
+
+type TFileTransfer = object
+  fileName: string
+  assetType: TAssetType
+  fullLen: int32
+  pos: int32
+  data: string
+  readyToSave: bool
+var currentFileTransfer: TFileTransfer
+currentFileTransfer.data = ""
+proc handleFileTransfer(serv: PServer; s: PStream) =
+  var
+    f = readScFileTransfer(s)
+  dispMessage "Recieved file part"
+  if not(f.pos == currentFileTransfer.pos):
+    dispMessage "MAYBE WE HAVE PROBLEMS"
+    dispMessage($f.pos &" "& $f.fileSize)
+    return
+  if currentFileTransfer.data.len == 0:
+    currentFileTransfer.data.setLen f.fileSize
+  echo(f.fileSize, " ", f.pos)
+  let len = f.data.len
+  copymem(
+    addr currentFileTransfer.data[f.pos],
+    addr f.data[0],
+    len)
+  currentFileTransfer.pos = f.pos + len.int32
+  if currentFileTransfer.pos == f.fileSize: #file should be done, rizzight
+    var l = currentFileTransfer.fullLen.int
+    currentFileTransfer.data = uncompress(
+      currentFileTransfer.data, l)
+    var resp: CsFileChallenge
+    resp.checksum = toMD5(currentFileTransfer.data)
+    serv.send HFileChallenge, resp
+    dispMessage "Sent the checksum ;)"
+  else:
+    var resp = newCsFilepartAck(currentFileTransfer.pos)
+    serv.send HFileTransfer, resp
+
+proc saveCurrentFile() =
+  if not currentFileTransfer.readyToSave: return
+  let 
+    path = expandPath(currentFileTransfer.assetType, currentFileTransfer.fileName)
+    parent = parentDir(path)
+  if not existsDir(parent):
+    createDir(parent)
+  writeFile path, currentFIleTransfer.data
+
+proc handleFileChallengeResult(serv: PServer; stream: PStream) =
+  var res = readScChallengeResult(stream).status
+  if res and currentFileTransfer.readyToSave:
+    saveCurrentFile()
+    dispMessage("Saved File!")
 
 proc handleFileChallenge(serv: PServer; s: PStream) =
   var 
@@ -70,7 +126,18 @@ proc handleFileChallenge(serv: PServer; s: PStream) =
     resp.needFile = true
   else:
     resp.checksum = toMD5(readFile(path))
+  currentFileTransfer.fileName = challenge.file
+  currentFileTransfer.assetType = challenge.assetType
+  currentFileTransfer.fullLen = challenge.fullLen
+  currentFileTransfer.pos = 0
+  currentFileTransfer.data.setLen 0
+  currentFileTransfer.readyToSave = false
+  dispmessage("Got file challenge for "& challenge.file)
   serv.writePkt HFileChallenge, resp
+
+proc handleChat(serv: PServer; s: PStream) =
+  var msg = readScChat(s)
+  messageArea.add(msg)
 
 proc connectToDirserv() =
   if dirServer.isNil:
@@ -80,7 +147,7 @@ proc connectToDirserv() =
       dispMessage(msg.resp)
       setConnected(true)
     dirServer.handlers[HLogin] = proc(serv: PServer; s: PStream) =
-      var info = readScLogin(s)
+      mySession = readScLogin(s)
       ##do something here
     dirServer.handlers[HZonelist] = proc(serv: PServer; s: PStream) =
       var 
@@ -108,10 +175,7 @@ proc connectToDirserv() =
       dispmessage("Ping: "& $ping.time)
       ping.time = epochTime().float32
       serv.writePkt HPoing, ping
-    dirServer.handlers[HChat] = proc(serv: PServer; s: PStream) =
-      var msg = readScChat(s)
-      echo "Got chat!"
-      messageArea.add(msg)
+    dirServer.handlers[HChat] = handleChat
     dirServer.handlers[HFileChallenge] = handleFileChallenge
   var hello = newCsHello()
   dirServer.writePkt HHello, hello
@@ -140,19 +204,19 @@ keyClient.registerHandler(MouseRight, down, proc() =
   mptext.setPosition(p)
   mptext.setString("($1,$2)"%[$p.x.int,$p.y.int]))
 
-  
-proc copyWith(t: PText, text: string): PText =
-  result = t.copy()
-
 
 proc connectZone(host: string, port: TPort) =
   if zone.isNil:
     zone = newServerConnection(host, port)
     zone.handlers[HFileChallenge] = handleFileChallenge
+    zone.handlers[HChallengeResult] = handleFileChallengeResult
+    zone.handlers[HFileTransfer] = handleFileTransfer
+    zone.handlers[HChat] = handleChat 
   else:
     zone.sock.connect(host, port)
   var hello = newCsHello()
   zone.writePkt HHello, hello
+  
 
 
 proc lobbyReady*() = 
@@ -169,11 +233,13 @@ proc tryLogin*(b: PButton) =
 proc tryTransition*(b: PButton) =
   ##check if we're logged in
   #<implementation censored by the church>
-  var errors: seq[string] = @[]
-  if loadSettings("", errors):
-    transition()
-  else:
-    for e in errors: dispmessage(e)
+  #var joinReq = newCsJ
+  zone.writePkt HZoneJoinReq, mySession
+  #var errors: seq[string] = @[]
+  #if loadSettings("", errors):
+  #  transition()
+  #else:
+  #  for e in errors: dispmessage(e)
 proc playOffline(b: PButton) =
   var errors: seq[string] = @[]
   if loadSettingsFromFile(clientSettings.offlineFile, errors):
@@ -234,6 +300,16 @@ proc lobbyInit*() =
     sendChat dirServer, chatInput.getText()
     chatInput.clearText())
   messageArea = gui.newMessageArea(vec2f(10.0, 575.0 - 20.0))
+  messageArea.sizeVisible = 25
+  gui.newButton(text = "Scrollback + 1", position = vec2f(185, 10), onClick = proc(b: PButton) =
+    messageArea.scrollBack += 1
+    update(messageArea))
+  gui.newButton(text = "Scrollback - 1", position = vec2f(185+160, 10), onClick = proc(b: PButton) = 
+    messageArea.scrollBack -= 1
+    update(messageArea))
+  gui.newButton(text = "Flood msg area", position = vec2f(185, 30), onClick = proc(b: PButton) =
+    for i in 0.. <30: 
+      dispMessage($i))
 
 var i = 0
 proc lobbyUpdate*(dt: float) = 
@@ -242,10 +318,10 @@ proc lobbyUpdate*(dt: float) =
   i = (i + 1) mod 60
   if i == 0:
     fpsTimer.setString("FPS: "& $round(1.0/dt))
-  if not pollServer(dirServer, 10) and bConnected:
+  if not pollServer(dirServer, 5) and bConnected:
     setConnected(false)
     echo("Lost connection")
-  discard pollServer(zone, 10)
+  discard pollServer(zone, 5)
 
 proc lobbyDraw*(window: PRenderWindow) =
   window.clear(Black)
