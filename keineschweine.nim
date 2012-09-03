@@ -207,6 +207,7 @@ proc unspec() =
     setMyVehicle veh
     localPlayer.spectator = false
     ingameClient.setActive
+    veh.body.setPos vector(100, 100)
 proc spec() =
   setMyVehicle nil
   localPlayer.spectator = true

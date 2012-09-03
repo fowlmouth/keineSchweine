@@ -54,20 +54,10 @@ proc setActiveZone(ind: int; zone: ScZoneRecord) =
   connectZone(zone.ip, zone.port)
   playBtn.enable()
 
-proc expandPath(kind: TAssetType; fileName: string): string =
-  result = "data/"
-  case kind
-  of FGraphics: result.add "gfx/"
-  of FSound:    result.add "sfx/"
-  else: nil
-  result.add fileName
-proc expandPath(fc: ScFileChallenge): string {.inline.} =
-  result = expandPath(fc.assetType, fc.file)
-
 type TFileTransfer = object
   fileName: string
   assetType: TAssetType
-  fullLen: int32
+  fullLen: int
   pos: int32
   data: string
   readyToSave: bool
@@ -76,7 +66,7 @@ currentFileTransfer.data = ""
 proc handleFileTransfer(serv: PServer; s: PStream) =
   var
     f = readScFileTransfer(s)
-  dispMessage "Recieved file part"
+  dispMessage "Recieved file part ("& $f.pos &'/'& $currentFileTransfer.fullLen &')'
   if not(f.pos == currentFileTransfer.pos):
     dispMessage "MAYBE WE HAVE PROBLEMS"
     dispMessage($f.pos &" "& $f.fileSize)
@@ -91,9 +81,8 @@ proc handleFileTransfer(serv: PServer; s: PStream) =
     len)
   currentFileTransfer.pos = f.pos + len.int32
   if currentFileTransfer.pos == f.fileSize: #file should be done, rizzight
-    var l = currentFileTransfer.fullLen.int
     currentFileTransfer.data = uncompress(
-      currentFileTransfer.data, l)
+      currentFileTransfer.data, currentFileTransfer.fullLen)
     var resp: CsFileChallenge
     resp.checksum = toMD5(currentFileTransfer.data)
     serv.send HFileChallenge, resp
@@ -109,7 +98,9 @@ proc saveCurrentFile() =
     parent = parentDir(path)
   if not existsDir(parent):
     createDir(parent)
+    echo("Created dir")
   writeFile path, currentFIleTransfer.data
+  echo "Write file"
 
 proc handleFileChallengeResult(serv: PServer; stream: PStream) =
   var res = readScChallengeResult(stream).status
@@ -128,7 +119,7 @@ proc handleFileChallenge(serv: PServer; s: PStream) =
     resp.checksum = toMD5(readFile(path))
   currentFileTransfer.fileName = challenge.file
   currentFileTransfer.assetType = challenge.assetType
-  currentFileTransfer.fullLen = challenge.fullLen
+  currentFileTransfer.fullLen = challenge.fullLen.int
   currentFileTransfer.pos = 0
   currentFileTransfer.data.setLen 0
   currentFileTransfer.readyToSave = false

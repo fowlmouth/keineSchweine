@@ -1,5 +1,5 @@
 import macros
-
+{.deadCodeElim: on.}
 #Inline macro.add() to allow for easier nesting
 proc und*(a: PNimrodNode; b: PNimrodNode): PNimrodNode {.compileTime.} =
   a.add(b)

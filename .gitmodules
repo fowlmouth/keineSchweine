@@ -4,3 +4,6 @@
 [submodule "dependencies/chipmunk"]
 	path = dependencies/chipmunk
 	url = https://github.com/fowlmouth/nimrod-chipmunk.git
+[submodule "dependencies/nake"]
+	path = dependencies/nake
+	url = git://gist.github.com/3607822.git

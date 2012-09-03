@@ -1,4 +1,6 @@
-import macros, streams, streams_enh, genpacket, sockets, md5
+import genpacket, sockets, md5
+defPacketImports()
+
 type
   PacketID* = char
 

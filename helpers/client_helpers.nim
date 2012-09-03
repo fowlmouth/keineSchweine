@@ -62,6 +62,15 @@ proc handlePkts(serv: PServer; stream: PStream) =
     else:
       serv.handlers[typ](serv, stream)
 
+proc expandPath*(assetType: TAssetType; fileName: string): string =
+  result = "data/"
+  case assetType
+  of FGraphics: result.add "gfx/"
+  of FSound:    result.add "sfx/"
+  else: nil
+  result.add fileName
+proc expandPath*(fc: ScFileChallenge): string {.inline.} =
+  result = expandPath(fc.assetType, fc.file)
 
 const ChunkSize = 512
 proc pollServer*(s: PServer; timeout: int): bool =

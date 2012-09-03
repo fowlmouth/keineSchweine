@@ -1,56 +1,73 @@
 import macros, macro_dsl, streams, streams_enh
-
-template `&$`(a, b: expr): expr {.immediate.} =
-  (a & $b)
+from strutils import format
 
 template newLenName(): stmt {.immediate.} =
-  let lenName {.inject.} = ^("len"&$lenNames)
+  let lenName {.inject.} = ^("len"& $lenNames)
   inc(lenNames)
 
-macro defPacket*(body: expr): stmt = 
+template defPacketImports*(): stmt {.immediate, dirty.} =
+  import macros, macro_dsl, streams, streams_enh
+  from strutils import format
+
+proc `$`*[T](x: seq[T]): string =
+  result = "[seq len="
+  result.add($x.len)
+  result.add ':'
+  for i in 0.. <len(x):
+    result.add "   "
+    result.add($x[i])
+  result.add ']'
+
+macro defPacket*(typeNameN: expr, typeFields: expr): stmt {.immediate.} = 
   result = newNimNode(nnkStmtList)
   let 
-    typeName = quoted2ident(body[1])
-    typeFields = body[2]
+    typeName = quoted2ident(typeNameN)
     packetID = ^"p"
     streamID = ^"s"
+    
+  echo treerepr(typeName)
+  echo treerepr(typeFIelds)
   var
     constructorParams = newNimNode(nnkFormalParams).und(typeName)
     constructor = newNimNode(nnkProcDef).und(
-      postfix(^("new"&$typeName.ident), "*"),
-      newNimNode(nnkEmpty),
+      postfix(^("new"& $typeName.ident), "*"),
+      emptyNode(),
+      emptyNode(),
       constructorParams,
-      newNimNode(nnkEmpty))
+      emptyNode(),
+      emptyNode())
     pack = newNimNode(nnkProcDef).und(
       postfix(^"pack", "*"),
-      newNimNode(nnkEmpty))
+      emptyNode(),
+      emptyNode(),
+      newNimNode(nnkFormalParams).und(
+        emptyNode(),   # : void
+        newNimNode(nnkIdentDefs).und(
+          packetID,    # p: var typeName
+          newNimNode(nnkVarTy).und(typeName),
+          emptyNode()),
+        newNimNode(nnkIdentDefs).und(
+          streamID,    # s: PStream
+          ^"PStream",
+          newNimNode(nnkNilLit))),
+      emptyNode(),
+      emptyNode())
     read = newNimNode(nnkProcDef).und(
       newIdentNode("read"& $typeName.ident).postfix("*"),
-      newNimNode(nnkEmpty))
+      emptyNode(),
+      emptyNode(),
+      newNimNode(nnkFormalParams).und(
+        typeName,   #result type
+        newNimNode(nnkIdentDefs).und(
+          streamID, # s: PStream = nil
+          ^"PStream",
+          newNimNode(nnkNilLit))),
+      emptyNode(),
+      emptyNode())
     constructorBody = newNimNode(nnkStmtList)
     packBody = newNimNode(nnkStmtList)
     readBody = newNimNode(nnkStmtList)
     lenNames = 0
-  pack.add(
-    newNimNode(nnkFormalParams).und(
-      newNimNode(nnkEmpty),   ##result type
-      newNimNode(nnkIdentDefs).und(
-        packetID,     ## p: var T
-        newNimNode(nnkVarTy).und(typeName),
-        newNimNode(nnkEmpty)),
-      newNimNode(nnkIdentDefs).und(
-        streamID,     ## s: PStream = nil
-        ^"PStream",
-        newNimNode(nnkNilLit))),
-    newNimNode(nnkEmpty))
-  read.add(
-    newNimNode(nnkFormalParams).und(
-      typeName,  #result type
-      newNimNode(nnkIdentDefs).und(
-        streamID,  ## s: PStream = nil
-        ^"PStream",
-        newNimNode(nnkNilLit))),
-    newNimNode(nnkEmpty))
   for i in 0.. typeFields.len - 1:
     let 
       name = typeFields[i][0]
@@ -130,9 +147,32 @@ macro defPacket*(body: expr): stmt =
     else:
       error("I dont know what to do with: "& treerepr(typeFields[i]))
   
+  var 
+    toStringFunc = newNimNode(nnkProcDef).und(
+      newNimNode(nnkPostfix).und(
+        ^"*",
+        newNimNode(nnkAccQuoted).und(^"$")),
+      emptyNode(),
+      emptyNode(),
+      newNimNode(nnkFormalParams).und(
+        ^"string",
+        newNimNode(nnkIdentDefs).und(
+          packetID, # p: typeName
+          typeName,
+          emptyNode())),
+      emptyNode(),
+      emptyNode(),
+      newNimNode(nnkStmtList).und(#[6]
+        newNimNode(nnkAsgn).und(
+          ^"result",                  ## result = 
+          newNimNode(nnkCall).und(#[6][0][1]
+            ^"format",  ## format
+            emptyNode()))))  ## "[TypeName   $1   $2]"
+    formatStr = "["& $typeName.ident
+  
   const emptyFields = {nnkEmpty, nnkNilLit}
   var objFields = newNimNode(nnkRecList)
-  for i in 0..len(typeFields)-1:
+  for i in 0.. < len(typeFields):
     let fname = typeFields[i][0]
     constructorParams.add(newNimNode(nnkIdentDefs).und(
       fname,
@@ -145,6 +185,13 @@ macro defPacket*(body: expr): stmt =
       ## empty the type default for the type def
       typeFields[i][2] = newNimNode(nnkEmpty)
     objFields.add(typeFields[i])
+    toStringFunc[6][0][1].add(
+      prefix("$", packetID.dot(fname)))
+    formatStr.add "   $"
+    formatStr.add($(i + 1))
+  
+  formatStr.add ']'
+  toStringFunc[6][0][1][1] = formatStr.lit()
   
   result.add(
     newNimNode(nnkTypeSection).und(
@@ -158,7 +205,8 @@ macro defPacket*(body: expr): stmt =
   result.add(constructor.und(constructorBody))
   result.add(pack.und(packBody))
   result.add(read.und(readBody))
-  #echo(repr(result))
+  result.add(toStringFunc)
+  echo(repr(result))
 
 proc `->`(a: string, b: string): PNimrodNode {.compileTime.} =
   result = newNimNode(nnkIdentDefs).und(^a, ^b, newNimNode(nnkEmpty))
@@ -171,15 +219,14 @@ proc `->`(a, b: PNimrodNode): PNimrodNode {.compileTime.} =
 proc newProc*(name: string, params: varargs[PNimrodNode], resultType: PNimrodNode): PNimrodNode {.compileTime.} =
   result = newNimNode(nnkProcDef).und(
     ^name,
-    newNimNode(nnkEmpty),
+    emptyNode(),
+    emptyNode(),
     newNimNode(nnkFormalParams).und(resultType),
-    newNimNode(nnkEmpty),
+    emptyNode(),
+    emptyNode(),
     newNimNode(nnkStmtList))
-  result[2].add(params)
-macro forwardPacket*(e: expr): stmt =
-  let
-    typeName = e[1]
-    underlyingType = e[2]
+  result[3].add(params)
+macro forwardPacket*(typeName: expr, underlyingType: typedesc): stmt {.immediate.} =
   result = newNimNode(nnkStmtList).und(
     newProc(
       "read"& $typeName.ident, 
@@ -189,11 +236,11 @@ macro forwardPacket*(e: expr): stmt =
       "pack",
       [ "p" -> newNimNode(nnkVarTy).und(typeName),
         "s" -> "PStream" -> newNimNode(nnkNilLit)],
-      newNimNode(nnkEmpty)))
-  result[0][4].add(
-    newNimNode(nnkDiscardStmt).und(
-      newCall(
-        "readData", ^"s", newNimNode(nnkAddr).und(^"result"), newCall("sizeof", ^"result"))))
+      emptyNode()))
+  result[0][4].add( #newNimNode(nnkDiscardStmt).und(
+    newCall(
+      "readData", ^"s", newNimNode(nnkAddr).und(^"result"), newCall("sizeof", ^"result")
+    ))
   result[1][4].add(
     newCall(
       "writeData", ^"s", newNimNode(nnkAddr).und(^"p"), newCall(
@@ -207,6 +254,13 @@ template forwardPacketT*(typeName: expr): stmt {.dirty, immediate.} =
     writeData(s, addr p, sizeof(p))
 
 when isMainModule:
+  type
+    SomeEnum = enum
+      A = 0'i8,
+      B, C
+  forwardPacket(SomeEnum, int8)
+  
+  
   defPacket(Foo, tuple[x: array[0..4, int8]])
   var f = newFoo([4'i8, 3'i8, 2'i8, 1'i8, 0'i8])
   var s2 = newStringStream("")
@@ -220,11 +274,6 @@ when isMainModule:
     z.data.setLen(0)
   
   
-  type
-    SomeEnum = enum
-      A = 0'i8,
-      B, C
-  forwardPacket(SomeEnum, int8)
   s.setPosition(0)
   s.data.setLen(0)
   var o = B

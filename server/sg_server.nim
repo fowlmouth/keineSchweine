@@ -243,6 +243,14 @@ when isMainModule:
     echo(path)
     quit(1)
   
+  ## Test file
+  block:
+    var 
+      TestFile: FileChallengePair
+      contents = repeatStr(2, "abcdefghijklmnopqrstuvwxyz")
+    testFile.challenge = newScFileChallenge("foobar.test", FZoneCfg, contents.len.int32) 
+    testFile.file = checksumStr(contents)
+    myAssets.add testFile
   
   setCurrentDir getAppDir().parentDir()
   block:
@@ -257,6 +265,7 @@ when isMainModule:
     var pair: FileChallengePair
     pair.challenge.file = zoneFile
     pair.challenge.assetType = FZoneCfg
+    pair.challenge.fullLen = zoneSettings.len.int32
     pair.file = checksumStr(zoneSettings)
     myAssets.add pair
   
@@ -269,6 +278,7 @@ when isMainModule:
       var pair: FileChallengePair
       pair.challenge.file = file 
       pair.challenge.assetType = FGraphics
+      pair.challenge.fullLen = getFileSize(expandPath(FGraphics, file)).int32
       pair.file = s.contents
       myAssets.add pair
   

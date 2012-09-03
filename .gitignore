@@ -1,5 +1,9 @@
 nimcache
 keineschweine
-server/sg_server
-genpacket/genpacket
 server/dirserver
+server/sg_server
+server/nimcache
+genpacket/genpacket
+nakefile
+test
+
