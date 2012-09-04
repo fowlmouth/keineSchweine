@@ -14,8 +14,8 @@ type
   PButton* = ref TButton
   TButton* = object of TGuiObject
     enabled: bool
-    bg: sfml.PRectangleShape
-    text: PText
+    bg*: sfml.PRectangleShape
+    text*: PText
     onClick*: TButtonClicked
     bounds: TFloatRect
   PButtonCollection* = ref TButtonCollection

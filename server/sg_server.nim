@@ -160,12 +160,12 @@ handlers[HFileChallenge] = proc(client: PClient; stream: PStream) =
   else:
     var res = newScChallengeResult(false)
     if fcResp.checksum == fcSeq.file.file.sum: ##client is good
-      client.sendMessage "Checksum is good. ("& $(fcSeq.index+1) &'/'& $(myAssets.len) &')'
+      #client.sendMessage "Checksum is good. ("& $(fcSeq.index+1) &'/'& $(myAssets.len) &')'
       res.status = true
       client.send HChallengeResult, res
       fcSeq.next(client)
     else:
-      client.sendMessage "Checksum is bad. "& $fcResp.checksum &", "& $fcSeq.file.file.sum &". Sending file..."
+      #client.sendMessage "Checksum is bad, sending file..."
       client.send HChallengeResult, res
       fcSeq.startSend(client)
 
@@ -291,6 +291,7 @@ when isMainModule:
   var login = newSdZoneLogin(
     dirServerInfo[2].str, dirServerInfo[3].str,
     thisZone)  
+  #echo "MY LOGIN: ", $login
   
   dirServer = newServerConnection(dirServerInfo[0].str, dirServerInfo[1].num.TPort)
   dirServer.handlers[HDsMsg] = proc(serv: PServer; stream: PStream) =

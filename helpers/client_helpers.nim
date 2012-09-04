@@ -27,6 +27,7 @@ proc newServerConnection*(host: string; port: TPort): PServer =
   result.outgoing.data.setLen 0
   result.outgoing.flushImpl = proc(stream: PStream) =
     if stream.getPosition == 0: return
+    echo ">> ", repr(PStringStream(stream).data)
     stream.setPosition 0
     PStringStream(stream).data.setLen 0
   result.handlers = initTable[char, TScPktHandler](16)
@@ -54,10 +55,10 @@ proc sendChat*(serv: PServer; text: string) =
 
 proc handlePkts(serv: PServer; stream: PStream) =
   while not stream.atEnd:
+    echo "<< ", repr(PStringStream(stream).data[stream.getPosition()..high(PStringStream(stream).data)])
     var typ = readChar(stream)
     if not serv.handlers.hasKey(typ):
       echo("Unknown pkt ", repr(typ), '(', typ.ord,')')
-      echo(repr(PStringStream(stream).data))
       break
     else:
       serv.handlers[typ](serv, stream)
@@ -89,7 +90,9 @@ proc pollServer*(s: PServer; timeout: int): bool =
         if res < ChunkSize:
           incoming.data.setLen(incoming.data.len - (ChunkSize - res))
           break
-      else: break
+      else:
+        incoming.data.setLen pos
+        break
     handlePkts(s, incoming)
     incoming.flush()
   if selectWrite(ws, timeout).bool:

@@ -1,6 +1,6 @@
 import 
   sfml, sfml_vector, sfml_colors, chipmunk, os, math, strutils, gl, tables,
-  input_helpers, sg_lobby, sg_gui, sg_assets
+  input_helpers, sg_lobby, sg_gui, sg_assets, animations, sfml_stuff
 {.deadCodeElim: on.}
 type
   PPlayer* = ref TPlayer
@@ -25,7 +25,9 @@ type
     body: chipmunk.PBody
     shape: chipmunk.PShape
     record*: PObjectRecord
-    sprite: PSprite
+    anim*: PAnimation
+    when false:
+      sprite: PSprite
 const
   TAU = PI * 2.0
   TenDegrees = 10.0 * PI / 180.0
@@ -54,8 +56,16 @@ var
   stars: seq[PSpriteSheet] = @[]
   playBtn: PButton
   shipSelect = newGuiContainer()
+  delObjects: seq[int] = @[]
 when defined(foo):
   var mouseSprite: sfml.PCircleShape
+when defined(recordMode):
+  var 
+    images: seq[PImage] = @[]
+    isRecording = false
+    recordButton = newButton(
+      nil, text = "Record", pos = vec2f())
+  
 
 proc newNameTag*(text: string): PText =
   result = newText()
@@ -242,24 +252,46 @@ proc cp2sfml(a: TVector): TVector2f {.inline.} =
   result.x = a.x
   result.y = a.y
 
+proc `$`(obj: PGameObject): string =
+  result = "<Object "
+  result.add obj.record.name
+  result.add ' '
+  result.add($obj.body.getpos())
+  result.add '>'
 proc free(obj: PGameObject) =
-  if not obj.sprite.isNil: destroy(obj.sprite)
+  when false:
+    if not obj.sprite.isNil: destroy(obj.sprite)
   obj.record = nil
+  free(obj.anim)
+  obj.anim = nil
 proc newObject*(name: string): PGameObject =
   let record = fetchObj(name)
   if record.isNil: return nil
   new(result, free)
   result.record = record
-  result.sprite = record.anim.spriteSheet.sprite.copy()
+  result.anim = newAnimation(record.anim, AnimLoop)
+  when false:
+    result.sprite = record.anim.spriteSheet.sprite.copy()
   result.body = space.addBody(newBody(result.record.physics.mass, 10.0))
   result.shape = space.addShape(
     chipmunk.newCircleShape(result.body, result.record.physics.radius, vectorZero))
 proc addObject*(name: string) =
   var o = newObject(name)
-  if not o.isNil: objects.add(o)
+  if not o.isNil: 
+    echo "Adding object ", o
+    objects.add(o)
+proc explode(obj: PGameObject) = 
+  echo obj, " exploded"
+  let ind = objects.find(obj)
+  if ind != -1:
+    delObjects.add ind
+proc update(obj: PGameObject; dt: float) =
+  if not(obj.anim.next(dt)):
+    obj.explode()
+  else:
+    obj.anim.sprite.setPosition(obj.body.getPos.floor)
 proc draw(window: PRenderWindow, obj: PGameObject) {.inline.} =
-  window.draw(obj.sprite)
-
+  window.draw(obj.anim.sprite)
 
 proc update*(obj: PVehicle) =
   obj.sprite.setPosition(obj.body.getPos.floor)
@@ -309,8 +341,14 @@ when defined(DebugKeys):
     elif keyPressed(KeyComma):
       activeVehicle.body.setPos mouseToSpace())
   ingameClient.registerHandler(KeyY, down, proc() =
-    const objects = ["Asteroid1", "Asteroid2"]
-    addObject(objects[random(objects.len)]))
+    const looloo = ["Asteroid1", "Asteroid2"]
+    addObject(looloo[random(looloo.len)]))
+  ingameClient.registerHandler(KeyO, down, proc() =
+    if objects.len == 0:
+      echo "Objects is empty"
+      return
+    for i, o in pairs(objects):
+      echo(i, " ", o, " index: ", o.anim.index, " maxcol: ", o.anim.maxcol, " spriterect: ", o.anim.spriteRect))
   var 
     mouseJoint: PConstraint
     mouseBody = space.addBody(newBody(CpInfinity, CpInfinity))
@@ -376,8 +414,12 @@ proc update(dt: float) =
   if localPlayer != nil: localPlayer.update()
   for b in localBots:
     b.update()
-  #for o in objects:
-  #  o.update()
+  
+  for o in items(objects):
+    o.update(dt)
+  for i in countdown(high(delObjects), 0):
+    objects.del i
+  delObjects.setLen 0
   
   space.step(dt)
   space.eachBody(resetForcesCB, nil)
@@ -411,6 +453,7 @@ proc render(obj: PVehicle) =
 proc render() =
   window.clear(Black)
   window.setView(worldView)
+  
   if showStars:
     for star in stars:
       window.draw(star.sprite)
@@ -421,9 +464,14 @@ proc render() =
     window.draw(o)
   when defined(Foo):
     window.draw(mouseSprite)
+  
   window.setView(guiView)
+  
   when defined(showFPS):
     window.draw(fpsText)
+  when defined(recordMode):
+    window.draw(recordButton)
+  
   if localPlayer.spectator:
     window.draw(specGui)
   if showShipSelect: window.draw shipSelect

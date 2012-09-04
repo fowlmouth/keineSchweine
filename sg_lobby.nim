@@ -29,6 +29,7 @@ var
   activeServer: PServer
   bConnected = false
   outgoing = newStringStream("")
+  downloadProgress: PButton
   connectionButtons: seq[PButton] #buttons that depend on connection to function
 
 template dispmessage(m: expr): stmt = 
@@ -63,10 +64,16 @@ type TFileTransfer = object
   readyToSave: bool
 var currentFileTransfer: TFileTransfer
 currentFileTransfer.data = ""
+
+proc updateFileProgress*(pos: int32) =
+  let progress = pos.int / currentFileTransfer.fullLen
+  downloadProgress.bg.setSize(vec2f(progress * 100, 20))
+  downloadProgress.setString($pos &'/'& $currentFileTransfer.fullLen)
+
 proc handleFileTransfer(serv: PServer; s: PStream) =
   var
     f = readScFileTransfer(s)
-  dispMessage "Recieved file part ("& $f.pos &'/'& $currentFileTransfer.fullLen &')'
+  updateFileProgress(f.pos)
   if not(f.pos == currentFileTransfer.pos):
     dispMessage "MAYBE WE HAVE PROBLEMS"
     dispMessage($f.pos &" "& $f.fileSize)
@@ -83,6 +90,7 @@ proc handleFileTransfer(serv: PServer; s: PStream) =
   if currentFileTransfer.pos == f.fileSize: #file should be done, rizzight
     currentFileTransfer.data = uncompress(
       currentFileTransfer.data, currentFileTransfer.fullLen)
+    currentFileTransfer.readyToSave = true
     var resp: CsFileChallenge
     resp.checksum = toMD5(currentFileTransfer.data)
     serv.send HFileChallenge, resp
@@ -197,6 +205,7 @@ keyClient.registerHandler(MouseRight, down, proc() =
 
 
 proc connectZone(host: string, port: TPort) =
+  echo "Connecting to zone at ", host, ':', port
   if zone.isNil:
     zone = newServerConnection(host, port)
     zone.handlers[HFileChallenge] = handleFileChallenge
@@ -254,6 +263,12 @@ proc lobbyInit*() =
   clientSettings.resolution.bitsPerPixel = s["resolution"][2].num.cint
   zonelist.setPosition(vec2f(200.0, 100.0))
   connectionButtons = @[]
+  
+  downloadProgress = gui.newButton(
+    text = "", position = vec2f(10, 130), onClick = nil) 
+  downloadProgress.bg.setFillColor(color(34, 139, 34))
+  downloadProgress.bg.setSize(vec2f(0, 0))
+  
   u_alias = gui.newTextEntry(
     if s.existsKey("alias"): s["alias"].str else: "alias", 
     vec2f(10.0, 10.0))

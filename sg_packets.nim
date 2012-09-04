@@ -4,7 +4,7 @@ defPacketImports()
 type
   PacketID* = char
 
-template idpacket(pktName, id, s2c, c2s: expr): stmt {.immediate.} =
+template idpacket(pktName, id, s2c, c2s: expr): stmt {.immediate, dirty.} =
   let `H pktName`* {.inject.} = id
   defPacket(`Sc pktName`, s2c)
   defPacket(`Cs pktName`, c2s)

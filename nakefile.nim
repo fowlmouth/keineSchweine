@@ -1,17 +1,39 @@
 import nake
 nakeImports
 
-const ExeName = "keineschweine"
+const 
+  ExeName = "keineschweine"
+  ServerDefines = "-d:NoSFML"
+  TestBuildDefines = "-d:showFPS -d:moreNimrod -d:debugKeys -d:foo -d:recordMode --forceBuild"
 
 task "test", "Build to test dir":
-  let res = shell("nimrod", "--forceBuild",
-    "-d:showFPS", "-d:moreNimrod", "-d:debugKeys",
-    "compile", ExeName)
+  let res = shell("nimrod", TestBuildDefines, "compile", ExeName)
   if res == 0:
     runTask "skel"
-    moveFile ExeName, "test"/ExeName
+    copyFile ExeName, "test"/ExeName
     cd "test"
     shell "./"&ExeName
+    cd ".."
+
+task "dirserver", "build the directory server":
+  cd "server"
+  if shell("nimrod", ServerDefines, "compile", "dirserver") != 0:
+    echo "Failed to build the dirserver"
+    quit 1
+  cd ".."
+
+task "servers", "build the server and directory server":
+  runTask "dirserver"
+  cd "server"
+  if shell("nimrod", ServerDefines, "compile", "sg_server") != 0:
+    echo "Failed to build the zoneserver"
+    quit 1
+  cd ".."
+  echo "Successfully built both servers :')"
+
+task "all", "run SERVERS and TEST tasks":
+  runTask "servers"
+  runTask "test"
 
 task "release", "release build":
   let res = shell("nimrod", "-d:release", "compile", ExeName)

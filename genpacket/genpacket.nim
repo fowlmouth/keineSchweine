@@ -24,9 +24,6 @@ macro defPacket*(typeNameN: expr, typeFields: expr): stmt {.immediate.} =
     typeName = quoted2ident(typeNameN)
     packetID = ^"p"
     streamID = ^"s"
-    
-  echo treerepr(typeName)
-  echo treerepr(typeFIelds)
   var
     constructorParams = newNimNode(nnkFormalParams).und(typeName)
     constructor = newNimNode(nnkProcDef).und(
@@ -206,7 +203,7 @@ macro defPacket*(typeNameN: expr, typeFields: expr): stmt {.immediate.} =
   result.add(pack.und(packBody))
   result.add(read.und(readBody))
   result.add(toStringFunc)
-  echo(repr(result))
+  #echo(repr(result))
 
 proc `->`(a: string, b: string): PNimrodNode {.compileTime.} =
   result = newNimNode(nnkIdentDefs).und(^a, ^b, newNimNode(nnkEmpty))
@@ -237,15 +234,15 @@ macro forwardPacket*(typeName: expr, underlyingType: typedesc): stmt {.immediate
       [ "p" -> newNimNode(nnkVarTy).und(typeName),
         "s" -> "PStream" -> newNimNode(nnkNilLit)],
       emptyNode()))
-  result[0][4].add( #newNimNode(nnkDiscardStmt).und(
+  result[0][6].add(newNimNode(nnkDiscardStmt).und(
     newCall(
       "readData", ^"s", newNimNode(nnkAddr).und(^"result"), newCall("sizeof", ^"result")
-    ))
-  result[1][4].add(
+    )))
+  result[1][6].add(
     newCall(
       "writeData", ^"s", newNimNode(nnkAddr).und(^"p"), newCall(
         "sizeof", ^"p")))
-  #echo(repr(result))
+  echo(repr(result))
 
 template forwardPacketT*(typeName: expr): stmt {.dirty, immediate.} =
   proc `read typeName`*(s: PStream): typeName =

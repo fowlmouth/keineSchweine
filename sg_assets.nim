@@ -27,7 +27,7 @@ type
     id*: int16
     name*: string
     playable*: bool
-    anim*: TAnimationRecord
+    anim*: PAnimationRecord
     physics*: TPhysicsRecord
     handling*: THandlingRecord
   TItemKind* = enum
@@ -36,23 +36,25 @@ type
   TObjectRecord* = object
     id*: int16
     name*: string
-    anim*: TAnimationRecord
+    anim*: PAnimationRecord
     physics*: TPhysicsRecord
   PItemRecord* = ref TItemRecord
   TItemRecord* = object
     id*: int16
     name*: string
     kind*: TItemKind
-    anim*: TAnimationRecord
+    anim*: PAnimationRecord
   TPhysicsRecord* = object
     mass*: float
     radius*: float
   THandlingRecord = object
     thrust*, top_speed*: float
     reverse*, strafe*, rotation*: int
+  PAnimationRecord* = ref TAnimationRecord
   TAnimationRecord* = object
     spriteSheet*: PSpriteSheet
     angle*: float
+    delay*: float  ##animation delay
   PSpriteSheet* = ref TSpriteSheet
   TSpriteSheet* = object 
     file*: string
@@ -83,7 +85,7 @@ proc importVeh(data: PJsonNode): PVehicleRecord
 proc importObject(data: PJsonNode): PObjectRecord
 proc importItem(data: PJsonNode): PItemRecord
 proc importPhys(data: PJsonNode): TPhysicsRecord
-proc importAnim(data: PJsonNode): TAnimationRecord
+proc importAnim(data: PJsonNode): PAnimationRecord
 proc importHandling(data: PJsonNode): THandlingRecord
 
 ## this is the only pipe between lobby and main.nim
@@ -304,20 +306,26 @@ proc importHandling(data: PJsonNode): THandlingRecord =
   hand.getField("reverse", result.reverse)
   hand.getField("strafe", result.strafe)
   hand.getField("rotation", result.rotation)
-proc importAnim(data: PJsonNode): TAnimationRecord =
+proc importAnim(data: PJsonNode): PAnimationRecord =
+  new(result)
   result.angle = 0.0
+  result.delay = 0.0
   result.spriteSheet = nil
   if not data.existsKey("anim"):
     return
   elif data["anim"].kind == JString:
     result.spriteSheet = newSprite(data["anim"].str)
     return
-  var anim = data["anim"]
+  var 
+    anim = data["anim"]
+    inInt: int
   if anim.existsKey("file"): 
     result.spriteSheet = newSprite(anim["file"].str)
-  var angle: int
-  anim.getField("angle", angle)
-  result.angle = angle.float * PI / 180.0
+  anim.getField("angle", inInt) ## comes in as degrees 
+  result.angle = inInt.float * PI / 180.0
+  anim.getField("delay", inInt) ## delay comes in as milliseconds
+  result.delay = inInt / 1000
+  
 proc importVeh(data: PJsonNode): PVehicleRecord =
   new(result)
   result.playable = false

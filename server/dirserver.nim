@@ -38,7 +38,7 @@ proc loginZone(client: PClient; login: SdZoneLogin): bool =
         break
 
 proc sendZoneList(client: PClient) = 
-  echo(">> zonelist ", client)
+  echo(">> zonelist ", client, ' ', HZoneList)
   client.send(HZonelist, zonelist)
 proc forwardPrivate(rcv: PClient; sender: PClient; txt: string) =
   var m = newScChat(CPriv, sender.alias, txt)
@@ -77,6 +77,7 @@ handlers[HLogin] = proc(client: PClient; stream: PStream) =
 handlers[HZoneList] = proc(client: PClient; stream: PStream) =
   var pinfo = readCsZoneList(stream)
   echo("** zonelist req")
+  sendZoneList client
 handlers[HChat] = proc(client: PClient; stream: PStream) =
   var chat = readCsChat(stream)
   if not client.auth:
@@ -98,6 +99,7 @@ handlers[HZoneLogin] = proc(client: PClient; stream: PStream) =
     client.sendServMsg "Invalid login"
   else:
     client.sendServMsg "Welcome to the servers"
+    echo "** Zone logged in: ", login
     zones.add client
     zonelist.zones.add client.record
 
@@ -151,7 +153,7 @@ proc poll*(timeout: int = 250) =
     var c = allClients[clientIndex]
     if c.outputBuf.getPosition > 0:
       let res = server.sendTo(c.addy.host, c.addy.port.TPort, c.outputBuf.data)
-      echo("Write ", c, " result: ", res, " data: ", c.outputBuf.data)
+      echo("Write ", c, " result: ", res, " data: ", repr(c.outputBuf.data))
       c.outputBuf.flush()
 
 when isMainModule:
