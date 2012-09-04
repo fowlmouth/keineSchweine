@@ -88,6 +88,7 @@ proc free*(container: PGuiContainer) =
 proc add*(container: PGuiContainer; widget: PGuiObject) =
   container.widgets.add(widget)
 proc add*(container: PGuiContainer; button: PButton) =
+  if container.isNil: return
   container.buttons.add(button)
 proc clearButtons*(container: PGuiContainer) =
   container.buttons.setLen 0
@@ -118,9 +119,12 @@ proc newButton*(container: PGuiContainer; text: string;
                  position: TVector2f; onClick: TButtonClicked;
                  startEnabled: bool = true): PButton =
   new(result, free)
-  init(result, text, position + container.position, onClick)
-  if not startEnabled: disable(result)
+  init(result, 
+       text, 
+       if not container.isNil: position + container.position else: position, 
+       onClick)
   container.add result
+  if not startEnabled: disable(result)
 proc init(b: PButton; text: string; position: TVector2f; onClick: TButtonClicked) =
   b.bg = newRectangleShape()
   b.bg.setSize(vec2f(80.0, 16.0))

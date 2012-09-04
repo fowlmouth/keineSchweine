@@ -61,11 +61,20 @@ when defined(foo):
   var mouseSprite: sfml.PCircleShape
 when defined(recordMode):
   var 
-    images: seq[PImage] = @[]
+    snapshots: seq[PImage] = @[]
     isRecording = false
+  proc startRecording() = 
+    if snapshots.len > 100: return
+    echo "Started recording"
+    isRecording = true
+  proc stopRecording() =
+    if isRecording:
+      echo "Stopped recording. ", snapshots.len, " images."
+    isRecording = false
+  var
     recordButton = newButton(
-      nil, text = "Record", pos = vec2f())
-  
+      nil, text = "Record", position = vec2f(680, 50),
+      onClick = proc(b: PButton) = startRecording())
 
 proc newNameTag*(text: string): PText =
   result = newText()
@@ -325,6 +334,20 @@ proc toggleShipSelect() =
 
 ingameClient.registerHandler(KeyF12, down, proc() = toggleSpec())
 ingameClient.registerHandler(KeyF11, down, toggleShipSelect)
+when defined(recordMode):
+  if not existsDir("data/snapshots"):
+    createDir("data/snapshots")
+  ingameClient.registerHandler(keynum9, down, proc() =
+    if not isRecording: startRecording()
+    else: stopRecording())
+  ingameClient.registerHandler(keynum0, down, proc() =
+    if snapshots.len > 0 and not isRecording:
+      echo "Saving images (LOL)"
+      for i in 0..high(snapshots):
+        if not(snapshots[i].save("data/snapshots/image"&($i)&".jpg")):
+          echo "Could not save"
+        snapshots[i].destroy()
+      snapshots.setLen 0)
 when defined(DebugKeys):
   ingameClient.registerHandler(KeyRShift, down, proc() =
     if keyPressed(KeyR):
@@ -476,6 +499,13 @@ proc render() =
     window.draw(specGui)
   if showShipSelect: window.draw shipSelect
   window.display()
+  
+  when defined(recordMode):
+    if isRecording:
+      if snapshots.len < 100:
+        if i mod 5 == 0:
+          snapshots.add(window.capture())
+      else: stopRecording()
 
 proc `$`*(a: TKeyEvent): string =
   return "KeyEvent: code=$1 alt=$2 control=$3 shift=$4 system=$5" % [
