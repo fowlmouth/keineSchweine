@@ -1,7 +1,7 @@
 import 
   os, math, strutils, gl, tables,
   sfml, sfml_vector, sfml_colors, chipmunk, 
-  input_helpers, animations, vehicles, sfml_stuff,
+  input_helpers, animations, vehicles, game_objects, sfml_stuff,
   sg_lobby, sg_gui, sg_assets
 {.deadCodeElim: on.}
 type
@@ -13,14 +13,6 @@ type
     alias: string
     nameTag: PText
     items: seq[PItem]
-  PGameObject = ref TGameObject
-  TGameObject = object
-    body: chipmunk.PBody
-    shape: chipmunk.PShape
-    record*: PObjectRecord
-    anim*: PAnimation
-    when false:
-      sprite: PSprite
   PItem* = ref object
     record: PItemRecord
     cooldown: float 
@@ -31,7 +23,7 @@ type
     body: chipmunk.PBody
     shape: chipmunk.PShape
 const
-  LGrabbable = 1.TLayers
+  LGrabbable* = 1.TLayers
 
   TAU = PI * 2.0
   TenDegrees = 10.0 * PI / 180.0
@@ -208,6 +200,9 @@ proc free*(veh: PVehicle) =
   veh.shape  = nil
 
 
+proc mouseToSpace*(): TVector =
+  result = window.convertCoords(vec2i(getMousePos()), worldView).sfml2cp()
+
 proc angularDampingSim(body: PBody, gravity: TVector, damping: CpFloat; dt: CpFloat){.cdecl.} =
   body.w -= (body.w * 0.98 * dt) 
   body.updateVelocity(gravity, damping, dt)
@@ -282,52 +277,13 @@ proc toggleSpec() {.inline.} =
   elif localPlayer.spectator: unspec()
   else: spec()
 
-proc `wmod`(x, y: float): float = return x - y * (x/y).floor
-proc move*(a: var TIntRect, left, top: cint): bool =
-  if a.left != left or a.top != top: result = true
-  a.left = left
-  a.top  = top
-proc degrees(rad: float): float =
-  return rad * 180.0 / PI
-proc floor(a: TVector): TVector2f {.inline.} =
-  result.x = a.x.floor
-  result.y = a.y.floor
-proc sfml2cp(a: TVector2f): TVector {.inline.} =
-  result.x = a.x
-  result.y = a.y
-proc cp2sfml(a: TVector): TVector2f {.inline.} =
-  result.x = a.x
-  result.y = a.y
-
-proc `$`(obj: PGameObject): string =
-  result = "<Object "
-  result.add obj.record.name
-  result.add ' '
-  result.add($obj.body.getpos())
-  result.add '>'
-proc free(obj: PGameObject) =
-  when false:
-    if not obj.sprite.isNil: destroy(obj.sprite)
-  obj.record = nil
-  free(obj.anim)
-  obj.anim = nil
-proc newObject*(name: string): PGameObject =
-  let record = fetchObj(name)
-  if record.isNil: return nil
-  new(result, free)
-  result.record = record
-  result.anim = newAnimation(record.anim, AnimLoop)
-  when false:
-    result.sprite = record.anim.spriteSheet.sprite.copy()
-  result.body = space.addBody(newBody(result.record.physics.mass, 10.0))
-  result.shape = space.addShape(
-    chipmunk.newCircleShape(result.body, result.record.physics.radius, vectorZero))
-  result.shape.setLayers(LGrabbable)
-  result.body.setPos(vector(100, 100))
 proc addObject*(name: string) =
   var o = newObject(name)
   if not o.isNil: 
     echo "Adding object ", o
+    discard space.addBody(o.body)
+    discard space.addShape(o.shape)
+    o.shape.setLayers(LGrabbable)
     objects.add(o)
 proc explode(obj: PGameObject) = 
   echo obj, " exploded"
@@ -343,21 +299,19 @@ proc update(obj: PGameObject; dt: float) =
 proc draw(window: PRenderWindow, obj: PGameObject) {.inline.} =
   window.draw(obj.anim.sprite)
 
+proc update*(obj: PVehicle) =
+  obj.sprite.setPosition(obj.body.getPos.floor)
+  let 
+    x = ((-obj.body.getAngVel + W_LIMIT) / (W_LIMIT*2.0) * (obj.record.anim.spriteSheet.cols - 1).float).floor.int * obj.record.anim.spriteSheet.framew
+    y = ((obj.offsetAngle.wmod(TAU) / TAU) * obj.record.anim.spriteSheet.rows.float).floor.int * obj.record.anim.spriteSheet.frameh
+  if obj.spriteRect.move(x.cint, y.cint):
+    obj.sprite.setTextureRect(obj.spriteRect)
+
 let nameTagOffset = vec2f(0.0, 1.0)
 proc update*(obj: PPlayer) =
   if not obj.spectator:
     obj.vehicle.update()
     obj.nameTag.setPosition(obj.vehicle.body.getPos.floor + (nameTagOffset * (obj.vehicle.record.physics.radius + 5).cfloat))
-
-proc ff(f: float, precision = 2): string {.inline.} = return formatFloat(f, ffDecimal, precision)
-proc vec2i(a: TVector2f): TVector2i =
-  result.x = a.x.cint
-  result.y = a.y.cint
-
-proc mouseToSpace*(): TVector =
-  var pos = window.convertCoords(vec2i(getMousePos()), worldView)
-  result = pos.sfml2cp()
-  #result = getMousePos().sfml2cp
 
 var showShipSelect = false
 proc toggleShipSelect() = 
@@ -444,7 +398,7 @@ proc resetForcesCB(body: PBody; data: pointer) {.cdecl.} =
 
 when defined(showFPS):
   var i = 0
-proc update(dt: float) =
+proc think(dt: float) =
   if localPlayer.spectator:
     if keyPressed(KeyLeft):
       worldView.move(vec2f(-1.0, 0.0) * specCameraSpeed)
@@ -497,22 +451,12 @@ proc update(dt: float) =
       fpsText.setString($(1.0/dt).round)
       i = 0
 
-
-proc loadTexture(filename: string): PTexture =
-  var image = newImage(filename)
-  if image == nil:
-    echo("Could not load image "& filename)
-  result = newTexture(image)
-  image.destroy()
-
 proc draw(window: PRenderWindow, player: PPlayer) {.inline.} =
   if not player.spectator: 
     if player.vehicle != nil:
       window.draw(player.vehicle.sprite)
     window.draw(player.nameTag)
 
-proc render(obj: PVehicle) =
-  window.draw(obj.sprite)
 proc render() =
   window.clear(Black)
   window.setView(worldView)
@@ -546,10 +490,6 @@ proc render() =
         if i mod 5 == 0:
           snapshots.add(window.capture())
       else: stopRecording()
-
-proc `$`*(a: TKeyEvent): string =
-  return "KeyEvent: code=$1 alt=$2 control=$3 shift=$4 system=$5" % [
-    $a.code, $a.alt, $a.control, $a.shift, $a.system]
 
 proc readyMainState() =
   specInputClient.setActive()
@@ -592,7 +532,7 @@ when isMainModule:
     let dt = frameRate.restart.asMilliSeconds().float / 1000.0
     case getActiveState()
     of Field:
-      update(dt)
+      think(dt)
       render()
     of Lobby:
       lobbyUpdate(dt)

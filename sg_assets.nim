@@ -63,7 +63,7 @@ type
     radius*: float
   THandlingRecord = object
     thrust*, top_speed*: float
-    reverse*, strafe*, rotation*: int
+    reverse*, strafe*, rotation*: float
   TSoulRecord = object
     energy*: int
     health*: int
@@ -297,11 +297,17 @@ proc fetchBullet(name: string): PBulletRecord =
 proc getField(node: PJsonNode, field: string, target: var float) =
   if not node.existsKey(field):
     return
-  target = node[field].fnum
+  if node[field].kind == JFloat:
+    target = node[field].fnum
+  elif node[field].kind == JInt:
+    target = node[field].num.float
 proc getField(node: PJsonNode, field: string, target: var int) =
   if not node.existsKey(field):
     return
-  target = node[field].num.int
+  if node[field].kind == JInt:
+    target = node[field].num.int
+  elif node[field].kind == JFloat:
+    target = node[field].fnum.int
 
 proc importLevel(data: PJsonNode): PLevelSettings =
   new(result)
@@ -332,9 +338,9 @@ proc importPhys(data: PJsonNode): TPhysicsRecord =
 proc importHandling(data: PJsonNode): THandlingRecord =
   result.thrust = 45.0
   result.topSpeed = 100.0 #unused
-  result.reverse = 30
-  result.strafe = 30
-  result.rotation = 2200
+  result.reverse = 30.0
+  result.strafe = 30.0
+  result.rotation = 2200.0
   if not data.existsKey("handling") or data["handling"].kind != JObject:
     return
   var hand = data["handling"]
