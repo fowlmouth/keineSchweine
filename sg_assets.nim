@@ -57,15 +57,16 @@ type
     id*: int16
     name*: string
     anim*: PAnimationRecord
-    when not defined(NoChipmunk):
-      body*: chipmunk.PBody ##bullets are pre-instantiated and copied when
-      shape*: chipmunk.PShape ##fired
+    physics*: TPhysicsRecord
   TPhysicsRecord* = object
     mass*: float
     radius*: float
   THandlingRecord = object
     thrust*, top_speed*: float
     reverse*, strafe*, rotation*: int
+  TSoulRecord = object
+    energy*: int
+    health*: int
   PAnimationRecord* = ref TAnimationRecord
   TAnimationRecord* = object
     spriteSheet*: PSpriteSheet
@@ -97,6 +98,11 @@ proc validateSettings*(settings: PJsonNode; errors: var seq[string]): bool
 proc loadSettings*(rawJson: string, errors: var seq[string]): bool
 proc loadSettingsFromFile*(filename: string, errors: var seq[string]): bool
 
+proc fetchVeh*(name: string): PVehicleRecord
+proc fetchItm*(itm: string): PItemRecord
+proc fetchObj*(name: string): PObjectRecord
+proc fetchBullet(name: string): PBulletRecord
+
 proc importLevel(data: PJsonNode): PLevelSettings
 proc importVeh(data: PJsonNode): PVehicleRecord
 proc importObject(data: PJsonNode): PObjectRecord
@@ -105,7 +111,7 @@ proc importPhys(data: PJsonNode): TPhysicsRecord
 proc importAnim(data: PJsonNode): PAnimationRecord
 proc importHandling(data: PJsonNode): THandlingRecord
 proc importBullet(data: PJsonNode): PBulletRecord
-
+proc importSoul(data: PJsonNode): TSoulRecord
 ## this is the only pipe between lobby and main.nim
 proc getActiveState*(): TGameState =
   result = activeState
@@ -363,7 +369,11 @@ proc importAnim(data: PJsonNode): PAnimationRecord =
   result.angle = inInt.float * PI / 180.0
   anim.getField("delay", inInt) ## delay comes in as milliseconds
   result.delay = inInt / 1000
+proc importSoul(data: PJsonNode): TSoulRecord =
+  result.energy = 10000
+  result.health = 1
   
+
 proc importVeh(data: PJsonNode): PVehicleRecord =
   new(result)
   result.playable = false
@@ -411,14 +421,9 @@ proc importItem(data: PJsonNode): PItemRecord =
   of "Ammo":
     result.kind = Ammo
   else: nil
-proc free(record: PBulletRecord) = 
-  when not defined(NoChipmunk):
-    if not record.body.isNil:
-      record.body.free()
-    if not record.shape.isNil:
-      record.body.free()
+
 proc importBullet(data: PJsonNode): PBulletRecord =
-  new(result, free)
+  new(result)
   result.id = -1
   
   var bdata: PJsonNode

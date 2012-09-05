@@ -34,7 +34,7 @@ proc newAnimation*(src: PAnimationRecord; style = AnimLoop): PAnimation =
   result.spriteRect = result.sprite.getTextureRect()
   result.style = style
 
-proc next*(obj: PAnimation; dt: float): bool =
+proc next*(obj: PAnimation; dt: float): bool {.discardable.} =
   ## step the animation. Returns false if the object is out of frames
   result = true
   obj.delay -= dt

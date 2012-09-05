@@ -1,6 +1,8 @@
 import 
-  sfml, sfml_vector, sfml_colors, chipmunk, os, math, strutils, gl, tables,
-  input_helpers, sg_lobby, sg_gui, sg_assets, animations, sfml_stuff
+  os, math, strutils, gl, tables,
+  sfml, sfml_vector, sfml_colors, chipmunk, 
+  input_helpers, animations, vehicles, sfml_stuff,
+  sg_lobby, sg_gui, sg_assets
 {.deadCodeElim: on.}
 type
   PPlayer* = ref TPlayer
@@ -10,16 +12,7 @@ type
     spectator: bool
     alias: string
     nameTag: PText
-  PVehicle* = ref TVehicle
-  TVehicle* = object
-    body:      chipmunk.PBody
-    shape:     chipmunk.PShape
-    record*:   PVehicleRecord
-    sprite*:   PSprite
-    spriteRect*: TIntRect
-  ## position*: TVector2f
-  ## velocity*: TVector2f
-  ## angle*:    float
+    items: seq[PItem]
   PGameObject = ref TGameObject
   TGameObject = object
     body: chipmunk.PBody
@@ -28,8 +21,18 @@ type
     anim*: PAnimation
     when false:
       sprite: PSprite
-  
+  PItem* = ref object
+    record: PItemRecord
+    cooldown: float 
+  PLiveBullet* = ref object ##represents a live bullet in the arena
+    lifetime: float
+    anim*: PAnimation
+    fromPlayer*: PPlayer
+    body: chipmunk.PBody
+    shape: chipmunk.PShape
 const
+  LGrabbable = 1.TLayers
+
   TAU = PI * 2.0
   TenDegrees = 10.0 * PI / 180.0
   ##temporary constants
@@ -42,6 +45,7 @@ var
   activeVehicle: PVehicle
   myVehicles: seq[PVehicle] = @[]
   objects: seq[PGameObject] = @[]
+  liveBullets: seq[PLiveBullet] = @[]
   gameRunning = true
   frameRate = newClock()
   showStars = off
@@ -93,6 +97,11 @@ proc newNameTag*(text: string): PText =
 var debugText = newNameTag("Loading...")
 debugText.setPosition(vec2f(0.0, 600.0 - 50.0))
 
+when defined(showFPS):
+  var fpsText = newNameTag("0")
+  #fpsText.setCharacterSize(16)
+  fpsText.setPosition(vec2f(300.0, (800 - 50).float))
+
 proc initLevel() =
   loadAllGraphics()
   let levelSettings = getLevelSettings()
@@ -120,18 +129,70 @@ proc initLevel() =
   for veh in playableVehicles():
     shipSelect.newButton(veh.name, position = pos, onClick = proc(b: PButton) = echo "-__-")
     pos.y += 18.0
-  
 
-when defined(showFPS):
-  var fpsText = newNameTag("0")
-  #fpsText.setCharacterSize(16)
-  fpsText.setPosition(vec2f(300.0, (800 - 50).float))
+
+proc newItem*(record: PItemRecord): PItem =
+  new(result)
+  result.record = record
+proc newItem*(name: string): PItem {.inline.} =
+  return newItem(fetchItm(name))
+proc canFire*(itm: PItem): bool = 
+  if itm.cooldown > 0.0: return
+  return true
+proc update*(itm: PItem; dt: float) =
+  itm.cooldown -= dt
+
+proc free(obj: PLiveBullet) =
+  space.removeShape obj.shape
+  space.removeBody obj.body
+  obj.shape.free
+  obj.body.free
+  obj.anim.free
+  
+proc newBullet*(record: PBulletRecord): PLiveBullet =
+  new(result, free)
+  result.anim = newAnimation(record.anim, AnimLoop)
+  result.body = space.addBody(newBody(
+    record.physics.mass,
+    momentForCircle(
+      record.physics.mass.cdouble, 
+      0.0, 
+      record.physics.radius.cdouble, 
+      vector(0.0,0.0)
+    ) * 0.62))
+  result.shape = space.addShape(
+    chipmunk.newCircleShape(result.body, 
+                            record.physics.radius.cdouble, 
+                            vectorZero))
+proc update*(b: PLiveBullet; dt: float): bool =
+  b.lifetime -= dt
+  b.anim.next(dt)
+  if b.lifetime <= 0.0:
+    return true
+proc draw*(window: PRenderWindow; b: PLiveBullet) {.inline.} =
+  draw(window, b.anim.sprite)
+
+
 
 proc newPlayer*(alias: string = "poo"): PPlayer =
   new(result)
   result.spectator = true
   result.alias     = alias
   result.nameTag   = newNameTag(result.alias)
+  result.items     = @[]
+proc updateItems*(player: PPlayer, dt: float): PPlayer =
+  for i in items(player.items):
+    update(i, dt)
+proc addItem*(player: PPlayer; name: string) =
+  player.items.add newItem(name)
+proc fireItem*(player: PPlayer; slot: int) =
+  if slot > player.items.len - 1: return
+  let item = player.items[slot]
+  if item.canFire:
+    echo "Fired item"
+    var lb: PLiveBullet
+    new(lb)
+
 
 proc free*(veh: PVehicle) =
   ("Destroying vehicle "& veh.record.name).echo
@@ -190,37 +251,6 @@ proc createBot() =
 var inputCursor = newVertexArray(sfml.Lines, 2)
 inputCursor[0].position = vec2f(10.0, 10.0)
 inputCursor[1].position = vec2f(50.0, 90.0)
-
-proc accel(obj: PVehicle, dt: float) =
-  #obj.velocity += vec2f(
-  #  cos(obj.angle) * obj.record.handling.thrust.float * dt,
-  #  sin(obj.angle) * obj.record.handling.thrust.float * dt)
-  obj.body.applyImpulse(
-    vectorForAngle(obj.body.getAngle()) * dt * obj.record.handling.thrust,
-    vectorZero)
-proc reverse(obj: PVehicle, dt: float) =
-  #obj.velocity += vec2f(
-  #  -cos(obj.angle) * obj.record.handling.reverse.float * dt,
-  #  -sin(obj.angle) * obj.record.handling.reverse.float * dt)
-  obj.body.applyImpulse(
-    -vectorForAngle(obj.body.getAngle()) * dt * obj.record.handling.reverse.float,
-    vectorZero)
-proc strafe_left*(obj: PVehicle, dt: float) =
-  obj.body.applyImpulse(
-    vectorForAngle(obj.body.getAngle()).perp() * obj.record.handling.strafe.float * dt,
-    vectorZero)
-proc strafe_right*(obj: PVehicle, dt: float) =
-  obj.body.applyImpulse(
-    vectorForAngle(obj.body.getAngle()).rperp()* obj.record.handling.strafe.float * dt,
-    vectorZero)
-proc turn_right*(obj: PVehicle, dt: float) =
-  #obj.angle = (obj.angle + (obj.record.handling.rotation.float / 10.0 * dt)) mod TAU
-  obj.body.setTorque(obj.record.handling.rotation.float)
-proc turn_left*(obj: PVehicle, dt: float) =
-  #obj.angle = (obj.angle - (obj.record.handling.rotation.float / 10.0 * dt)) mod TAU
-  obj.body.setTorque(-obj.record.handling.rotation.float)
-proc offsetAngle*(obj: PVehicle): float {.inline.} =
-  return (obj.record.anim.angle + obj.body.getAngle())
 
 proc hasVehicle(p: PPlayer): bool {.inline.} = 
   result = not p.spectator and not p.vehicle.isNil
@@ -292,6 +322,7 @@ proc newObject*(name: string): PGameObject =
   result.body = space.addBody(newBody(result.record.physics.mass, 10.0))
   result.shape = space.addShape(
     chipmunk.newCircleShape(result.body, result.record.physics.radius, vectorZero))
+  result.shape.setLayers(LGrabbable)
   result.body.setPos(vector(100, 100))
 proc addObject*(name: string) =
   var o = newObject(name)
@@ -308,18 +339,9 @@ proc update(obj: PGameObject; dt: float) =
     obj.explode()
   else:
     obj.anim.sprite.setPosition(obj.body.getPos.floor)
+    obj.anim.sprite.setRotation(obj.body.getAngle * 180.0 / PI)
 proc draw(window: PRenderWindow, obj: PGameObject) {.inline.} =
   window.draw(obj.anim.sprite)
-
-proc update*(obj: PVehicle) =
-  obj.sprite.setPosition(obj.body.getPos.floor)
-  #obj.sprite.setPosition(obj.position)
-  #let x = ((-obj.body.getAngVel + W_LIMIT) * obj.record.anim.spriteSheet.cols.float).floor * obj.record.anim.spriteSheet.framew.float ## 4 * obj.record.anim.spriteSheet.framew
-  #let x = ((-obj.body.getAngVel + W_LIMIT) * (obj.record.anim.spriteSheet.cols - 1).float).floor.int * obj.record.anim.spriteSheet.framew ## 4 * obj.record.anim.spriteSheet.framew
-  let x = ((-activeVehicle.body.getAngVel + W_LIMIT) / (W_LIMIT*2.0) * (activeVehicle.record.anim.spriteSheet.cols - 1).float).floor.int * obj.record.anim.spriteSheet.framew
-  let y = ((obj.offsetAngle.wmod(TAU) / TAU) * obj.record.anim.spriteSheet.rows.float).floor.int * obj.record.anim.spriteSheet.frameh
-  if obj.spriteRect.move(x.cint, y.cint):
-    obj.sprite.setTextureRect(obj.spriteRect)
 
 let nameTagOffset = vec2f(0.0, 1.0)
 proc update*(obj: PPlayer) =
@@ -358,6 +380,10 @@ when defined(recordMode):
         snapshots[i].destroy()
       snapshots.setLen 0)
 when defined(DebugKeys):
+  ingameClient.registerHandler(KeyNum1, down, proc() =
+    if localPlayer.items.len == 0:
+      localPlayer.addItem("Mass Driver")
+      echo "Gave you a mass driverz")
   ingameClient.registerHandler(KeyRShift, down, proc() =
     if keyPressed(KeyR):
       echo("Friction: ", ff(activeVehicle.shape.getFriction()))
@@ -386,7 +412,7 @@ when defined(DebugKeys):
     mouseBody = space.addBody(newBody(CpInfinity, CpInfinity))
   ingameClient.registerHandler(MouseMiddle, down, proc() =
     var point = mouseToSpace()
-    var shape = space.pointQueryFirst(point, 0, 0)
+    var shape = space.pointQueryFirst(point, LGrabbable, 0)
     if shape.isNil: 
       echo("no shape there..\n", $point)
       return
@@ -441,6 +467,8 @@ proc update(dt: float) =
       activeVehicle.strafe_left(dt)
     elif keyPressed(keyx):
       activeVehicle.strafe_right(dt)
+    if keyPressed(KeyLControl):
+      localPlayer.fireItem 0
     worldView.setCenter(activeVehicle.body.getPos.floor)#cp2sfml)
   
   if localPlayer != nil: localPlayer.update()
@@ -452,6 +480,9 @@ proc update(dt: float) =
   for i in countdown(high(delObjects), 0):
     objects.del i
   delObjects.setLen 0
+  
+  when defined(DebugKeys):
+    mouseBody.setPos(mouseToSpace())
   
   space.step(dt)
   space.eachBody(resetForcesCB, nil)

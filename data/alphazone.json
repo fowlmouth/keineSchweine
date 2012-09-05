@@ -12,6 +12,9 @@
   "physics":{
    "mass":4,
    "radius":23},
+  "soul":{
+   "energy":1700,
+   "health":50},
   "weapons":[   "bio_cannon",   "bio_bomb",   "bio_mine"],
   "thrust":{
    "timer":220,
