@@ -10,6 +10,8 @@ when defined(NoSFML):
     result.y = y
 else:
   import sfml, sfml_vector
+when not defined(NoChipmunk):
+  import chipmunk
 
 type
   PZoneSettings* = ref TZoneSettings
@@ -17,6 +19,7 @@ type
     vehicles: seq[PVehicleRecord]
     items: seq[PItemRecord]
     objects: seq[PObjectRecord]
+    bullets: seq[PBulletRecord]
     levelSettings: PLevelSettings
   PLevelSettings* = ref TLevelSettings
   TLevelSettings* = object
@@ -42,8 +45,21 @@ type
   TItemRecord* = object
     id*: int16
     name*: string
-    kind*: TItemKind
     anim*: PAnimationRecord
+    physics*: TPhysicsRecord ##apply when the item is dropped in the arena
+    case kind*: TItemKind
+    of Projectile: 
+      bullet*: PBulletRecord
+    else: 
+      nil
+  PBulletRecord* = ref TBulletRecord
+  TBulletRecord* = object
+    id*: int16
+    name*: string
+    anim*: PAnimationRecord
+    when not defined(NoChipmunk):
+      body*: chipmunk.PBody ##bullets are pre-instantiated and copied when
+      shape*: chipmunk.PShape ##fired
   TPhysicsRecord* = object
     mass*: float
     radius*: float
@@ -73,6 +89,7 @@ var
   nameToVehID*: TTable[string, int]
   nameToItemID*: TTable[string, int]
   nameToObjID*: TTable[string, int]
+  nameToBulletID*: TTable[string, int]
   activeState = Lobby
 proc newSprite*(filename: string): PSpriteSheet
 proc load*(ss: PSpriteSheet): bool {.discardable.}
@@ -87,6 +104,7 @@ proc importItem(data: PJsonNode): PItemRecord
 proc importPhys(data: PJsonNode): TPhysicsRecord
 proc importAnim(data: PJsonNode): PAnimationRecord
 proc importHandling(data: PJsonNode): THandlingRecord
+proc importBullet(data: PJsonNode): PBulletRecord
 
 ## this is the only pipe between lobby and main.nim
 proc getActiveState*(): TGameState =
@@ -153,6 +171,7 @@ else:
     ss.sprite = newSprite()
     ss.sprite.setTexture(ss.tex, true)
     ss.sprite.setTextureRect(intrect(0, 0, ss.framew.cint, ss.frameh.cint))
+    ss.sprite.setOrigin(vec2f(ss.framew / 2, ss.frameh / 2))
     result = true
 
 template addError(e: expr): stmt {.immediate.} =
@@ -213,11 +232,14 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
   cfg.vehicles = @[]
   cfg.items = @[]
   cfg.objects = @[]
+  cfg.bullets = @[]
   nameToVehID = initTable[string, int](32)
   nameToItemID = initTable[string, int](32)
   nameToObjID = initTable[string, int](32)
+  nameToBulletID = initTable[string, int](32)
   var 
     vID = 0'i16
+    bID = 0'i16
   for vehicle in settings["vehicles"].items:
     var veh = importVeh(vehicle)
     veh.id = vID
@@ -225,12 +247,26 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
     nameToVehID[veh.name] = veh.id
     inc vID
   vID = 0
+  if settings.existsKey("bullets"):
+    for blt in settings["bullets"].items:
+      var bullet = importBullet(blt)
+      bullet.id = bID
+      cfg.bullets.add bullet
+      nameToBulletID[bullet.name] = bullet.id
+      inc bID
   for item in settings["items"].items:
     var itm = importItem(item)
     itm.id = vID
     cfg.items.add itm
     nameToItemID[itm.name] = itm.id
     inc vID
+    if itm.kind == Projectile and itm.bullet.id == -1:
+      ## this item has an anonymous bullet, fix the ID and name
+      itm.bullet.id = bID 
+      itm.bullet.name = itm.name
+      cfg.bullets.add itm.bullet
+      nameToBulletID[itm.bullet.name] = itm.bullet.id
+      inc bID
   vID = 0
   for obj in settings["objects"].items:
     var o = importObject(obj)
@@ -249,6 +285,8 @@ proc fetchItm*(itm: string): PItemRecord =
   return cfg.items[nameToItemID[itm]]
 proc fetchObj*(name: string): PObjectRecord =
   return cfg.objects[nameToObjID[name]]
+proc fetchBullet(name: string): PBulletRecord =
+  return cfg.bullets[nameToBulletID[name]]
 
 proc getField(node: PJsonNode, field: string, target: var float) =
   if not node.existsKey(field):
@@ -355,9 +393,45 @@ proc importItem(data: PJsonNode): PItemRecord =
     result.name = "(broken)"
     return
   result.name = data[0].str
+  result.anim = importAnim(data[2])
+  result.physics = importPhys(data[2])
+  
   case data[1].str
   of "Projectile":
     result.kind = Projectile
+    if data[2]["bullet"].kind == JString:
+      result.bullet = fetchBullet(data[2]["bullet"].str)
+    elif data[2]["bullet"].kind == JInt:
+      result.bullet = cfg.bullets[data[2]["bullet"].num.int]
+    elif data[2]["bullet"].kind == JObject: 
+      result.bullet = importBullet(data[2]["bullet"])
+    else:
+      echo "UNKNOWN BULLET TYPE for item ", result.name
+      quit 1
   of "Ammo":
     result.kind = Ammo
   else: nil
+proc free(record: PBulletRecord) = 
+  when not defined(NoChipmunk):
+    if not record.body.isNil:
+      record.body.free()
+    if not record.shape.isNil:
+      record.body.free()
+proc importBullet(data: PJsonNode): PBulletRecord =
+  new(result, free)
+  result.id = -1
+  
+  var bdata: PJsonNode
+  if data.kind == JArray:
+    result.name = data[0].str
+    bdata = data[1]
+  elif data.kind == JObject:
+    bdata = data
+  else: 
+    echo "I'm a broken bullet :("
+    quit 1
+  
+  result.anim = importAnim(bdata)
+  when not defined(NoChipmunk):
+    #result.body = newBody(
+  

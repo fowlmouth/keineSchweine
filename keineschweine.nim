@@ -28,6 +28,7 @@ type
     anim*: PAnimation
     when false:
       sprite: PSprite
+  
 const
   TAU = PI * 2.0
   TenDegrees = 10.0 * PI / 180.0
@@ -71,6 +72,12 @@ when defined(recordMode):
     if isRecording:
       echo "Stopped recording. ", snapshots.len, " images."
     isRecording = false
+  proc zeroPad*(s: string; minLen: int): string =
+    if s.len < minLen:
+      result = repeatChar(minLen - s.len, '0')
+      result.add s
+    else:
+      result = s
   var
     recordButton = newButton(
       nil, text = "Record", position = vec2f(680, 50),
@@ -107,6 +114,7 @@ proc initLevel() =
     for sprite in levelSettings.starfield:
       sprite.tex.setRepeated(true)
       sprite.sprite.setTextureRect(levelArea)
+      sprite.sprite.setOrigin(vec2f(0, 0))
       stars.add(sprite)
   var pos = vec2f(0.0, 0.0)
   for veh in playableVehicles():
@@ -284,6 +292,7 @@ proc newObject*(name: string): PGameObject =
   result.body = space.addBody(newBody(result.record.physics.mass, 10.0))
   result.shape = space.addShape(
     chipmunk.newCircleShape(result.body, result.record.physics.radius, vectorZero))
+  result.body.setPos(vector(100, 100))
 proc addObject*(name: string) =
   var o = newObject(name)
   if not o.isNil: 
@@ -344,7 +353,7 @@ when defined(recordMode):
     if snapshots.len > 0 and not isRecording:
       echo "Saving images (LOL)"
       for i in 0..high(snapshots):
-        if not(snapshots[i].save("data/snapshots/image"&($i)&".jpg")):
+        if not(snapshots[i].save("data/snapshots/image"&(zeroPad($i, 3))&".jpg")):
           echo "Could not save"
         snapshots[i].destroy()
       snapshots.setLen 0)

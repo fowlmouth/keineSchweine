@@ -52,21 +52,44 @@
 "objects":[
  ["Asteroid1", {
   "physics":{
-   "mass":250,
+   "mass":7,
    "radius":27},
-  "anim":"asteroids/Rock64c_64x64.png"}],
+  "anim":{
+   "file":"asteroids/Rock64c_64x64.png",
+   "delay":100}
+  }],
  ["Asteroid2", {
   "physics":{
-   "mass":105,
+   "mass":5,
    "radius":14},
-  "anim":"asteroids/Rock48a_48x48.png"}],
+  "anim":{
+   "file":"asteroids/Rock48a_48x48.png",
+   "delay":88}
+  }],
  ["Solar Mold", {
   "physics":{
    "mass":60,
    "radius":38},
-  "anim":"ships/turrets/spaceMold_80x80.png"}]
+  "anim":{
+   "file":"ships/turrets/spaceMold_80x80.png",
+   "delay":70}
+  }]
+],
+"bullets":[
+ ["neutronbomb", {
+  "anim":{
+   "file":"bullets/EnergyBombD2_24x24.png",
+   "delay":60},
+  "physics":{
+   "mass":4,
+   "radius":8
+  }
+  }]
 ],
 "items":[
+ ["Neutron Bomb", "Projectile", {
+  "bullet":"neutronbomb"
+  }],
  ["Mass Driver", "Projectile", {
   "bullet":{
    "anim":"bullets/MassDriver_14x14.png",

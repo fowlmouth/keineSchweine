@@ -21,7 +21,7 @@ proc free*(obj: PAnimation) =
     echo "sprite is nil -__-"
   else:
     obj.sprite.destroy()
-  
+
 proc newAnimation*(src: PAnimationRecord; style = AnimLoop): PAnimation =
   new(result, free)
   result.sprite = src.spriteSheet.sprite.copy()
