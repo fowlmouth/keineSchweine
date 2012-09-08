@@ -9,7 +9,7 @@ when defined(NoSFML):
     result.x = x
     result.y = y
 else:
-  import sfml, sfml_vector
+  import sfml, sfml_vector, sfml_stuff
 when not defined(NoChipmunk):
   import chipmunk
 
@@ -58,6 +58,8 @@ type
     name*: string
     anim*: PAnimationRecord
     physics*: TPhysicsRecord
+    lifetime*, inheritVelocity*, baseVelocity*: float
+    explosion*: TExplosionRecord
   TPhysicsRecord* = object
     mass*: float
     radius*: float
@@ -67,6 +69,10 @@ type
   TSoulRecord = object
     energy*: int
     health*: int
+  TExplosionRecord* = object
+    anim*: PAnimationRecord
+    sound*: TSoundRecord 
+  TSoundRecord* = object ##to be implemented
   PAnimationRecord* = ref TAnimationRecord
   TAnimationRecord* = object
     spriteSheet*: PSpriteSheet
@@ -84,6 +90,8 @@ type
       tex*: PTexture
   TGameState* = enum
     Lobby, Transitioning, Field
+const
+  TAU* = PI * 2.0
 var 
   cfg: PZoneSettings
   SpriteSheets* = initTable[string, PSpriteSheet](64)
@@ -112,6 +120,8 @@ proc importAnim(data: PJsonNode): PAnimationRecord
 proc importHandling(data: PJsonNode): THandlingRecord
 proc importBullet(data: PJsonNode): PBulletRecord
 proc importSoul(data: PJsonNode): TSoulRecord
+proc importExplosion(data: PJsonNode): TExplosionRecord
+
 ## this is the only pipe between lobby and main.nim
 proc getActiveState*(): TGameState =
   result = activeState
@@ -309,11 +319,16 @@ proc getField(node: PJsonNode, field: string, target: var int) =
   elif node[field].kind == JFloat:
     target = node[field].fnum.int
 
+template checkKey(node: expr; key: string): stmt =
+  if not existsKey(node, key):
+    return
+
 proc importLevel(data: PJsonNode): PLevelSettings =
   new(result)
   result.size = vec2i(5000, 5000)
   result.starfield = @[]
-  if not data.existsKey("level"): return
+  
+  checkKey(data, "level")
   var level = data["level"]
   if level.existsKey("size") and level["size"].kind == JArray and level["size"].len == 2:
     result.size.x = level["size"][0].num.cint
@@ -324,61 +339,59 @@ proc importLevel(data: PJsonNode): PLevelSettings =
 proc importPhys(data: PJsonNode): TPhysicsRecord =
   result.radius = 20.0
   result.mass = 10.0
-  if not data.existsKey("physics") or data["physics"].kind != JObject:
+  
+  checkKey(data, "physics")
+  if data["physics"].kind != JObject:
     return
-  var phys = data["physics"]
-  var i: int
-  phys.getField("radius", i)
-  if i > 0:
-    result.radius = i.float
-    i = 0
-  phys.getField("mass", i)
-  if i > 0:
-    result.mass = i.float
+  
+  let phys = data["physics"]
+  phys.getField("radius", result.radius)
+  phys.getField("mass", result.mass)
 proc importHandling(data: PJsonNode): THandlingRecord =
   result.thrust = 45.0
   result.topSpeed = 100.0 #unused
   result.reverse = 30.0
   result.strafe = 30.0
   result.rotation = 2200.0
-  if not data.existsKey("handling") or data["handling"].kind != JObject:
+  
+  checkKey(data, "handling")
+  if data["handling"].kind != JObject:
     return
-  var hand = data["handling"]
-  var i = 0
-  hand.getField("thrust", i)
-  if i > 0: 
-    result.thrust = i.float
-    i = 0
-  hand.getField("top_speed", i)
-  if i > 0: 
-    result.topSpeed = i.float
-    i = 0
+  
+  let hand = data["handling"]
+  hand.getField("thrust", result.thrust)
+  hand.getField("top_speed", result.topSpeed)
   hand.getField("reverse", result.reverse)
   hand.getField("strafe", result.strafe)
   hand.getField("rotation", result.rotation)
 proc importAnim(data: PJsonNode): PAnimationRecord =
   new(result)
   result.angle = 0.0
-  result.delay = 0.0
+  result.delay = 1000.0
   result.spriteSheet = nil
-  if not data.existsKey("anim"):
-    return
-  elif data["anim"].kind == JString:
+  
+  checkKey(data, "anim")
+  if data["anim"].kind == JString:
     result.spriteSheet = newSprite(data["anim"].str)
     return
-  var 
-    anim = data["anim"]
-    inInt: int
+  let anim = data["anim"]
   if anim.existsKey("file"): 
     result.spriteSheet = newSprite(anim["file"].str)
-  anim.getField("angle", inInt) ## comes in as degrees 
-  result.angle = inInt.float * PI / 180.0
-  anim.getField("delay", inInt) ## delay comes in as milliseconds
-  result.delay = inInt / 1000
+  anim.getField("angle", result.angle) 
+  result.angle = radians(result.angle) ## comes in as degrees 
+  anim.getField("delay", result.delay) 
+  result.delay /= 1000 ## delay comes in as milliseconds
 proc importSoul(data: PJsonNode): TSoulRecord =
   result.energy = 10000
   result.health = 1
-  
+  checkKey(data, "soul")
+  let soul = data["soul"]
+  soul.getField("energy", result.energy)
+  soul.getField("health", result.health)
+proc importExplosion(data: PJsonNode): TExplosionRecord =
+  checkKey(data, "explode")
+  let expl = data["explode"]
+  result.anim = importAnim(expl)
 
 proc importVeh(data: PJsonNode): PVehicleRecord =
   new(result)
@@ -412,8 +425,8 @@ proc importItem(data: PJsonNode): PItemRecord =
   result.anim = importAnim(data[2])
   result.physics = importPhys(data[2])
   
-  case data[1].str
-  of "Projectile":
+  case data[1].str.toLower
+  of "projectile":
     result.kind = Projectile
     if data[2]["bullet"].kind == JString:
       result.bullet = fetchBullet(data[2]["bullet"].str)
@@ -424,9 +437,12 @@ proc importItem(data: PJsonNode): PItemRecord =
     else:
       echo "UNKNOWN BULLET TYPE for item ", result.name
       quit 1
-  of "Ammo":
+  of "ammo":
     result.kind = Ammo
-  else: nil
+  of "utility":
+    nil
+  else:
+    echo "Invalid item type \"", data[1].str, "\" for item ", result.name
 
 proc importBullet(data: PJsonNode): PBulletRecord =
   new(result)
@@ -443,6 +459,14 @@ proc importBullet(data: PJsonNode): PBulletRecord =
     quit 1
   
   result.anim = importAnim(bdata)
-  when not defined(NoChipmunk):
-    #result.body = newBody(
+  result.physics = importPhys(bdata)
   
+  result.lifetime = 2000.0
+  result.inheritVelocity = 1000.0
+  result.baseVelocity = 30.0
+  getField(bdata, "lifetime", result.lifetime)
+  getField(bdata, "inheritVelocity", result.inheritVelocity)
+  getField(bdata, "baseVelocity", result.baseVelocity)
+  result.lifetime /= 1000.0 ## lifetime is stored as milliseconds
+  result.inheritVelocity /= 1000.0 ## inherit velocity 1000 = 1.0 (100%)
+  result.explosion = importExplosion(bdata)

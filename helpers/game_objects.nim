@@ -30,3 +30,5 @@ proc newObject*(record: PObjectRecord): PGameObject =
   result.body.setPos(vector(100, 100))
 proc newObject*(name: string): PGameObject =
   result = newObject(fetchObj(name))
+proc draw*(window: PRenderWindow, obj: PGameObject) {.inline.} =
+  window.draw(obj.anim.sprite)

@@ -11,12 +11,7 @@ task "test", "Build with test defines":
   if shell("nimrod", TestBuildDefines, "compile", ExeName) != 0:
     echo "The build failed."
     quit 1
-task "testrun", "Build to test dir and run":
-  runTask "test"
-  runTask "skel"
-  copyFile ExeName, "test"/ExeName
-  withDir "test":
-    shell "./"&ExeName
+  shell "."/ExeName, "offline"
 
 task "dirserver", "build the directory server":
   withDir "server":
@@ -47,7 +42,7 @@ task "release", "release build":
     runTask "clean"
     ## zip up all the files and such or something useful here 
 
-task "skel", "create skeleton test dir for testing":
+task "testskel", "create skeleton test dir for testing":
   if not existsDir("test"):
     createDir("test")
   if not existsDir("test/data/fnt"):
@@ -56,11 +51,13 @@ task "skel", "create skeleton test dir for testing":
     copyFile "data/fnt/LiberationMono-Regular", "test/data/fnt/LiberationMono-Regular.ttf"
   if not existsFile("test/client_settings.json"):
     copyFile "client_settings.json", "test/client_settings.json"
+  runTask "test"
+  copyFile ExeName, "test"/ExeName
+  withDir "test":
+    shell "."/ExeName
 
 task "clean", "cleanup generated files":
   var dirs = @["nimcache", "server"/"nimcache"]
   dirs.each(proc(x: var string) =
     if existsDir(x): removeDir(x))
-  
-
 

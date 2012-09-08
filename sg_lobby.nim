@@ -240,7 +240,7 @@ proc tryTransition*(b: PButton) =
   #  transition()
   #else:
   #  for e in errors: dispmessage(e)
-proc playOffline(b: PButton) =
+proc playOffline*(b: PButton) =
   var errors: seq[string] = @[]
   if loadSettingsFromFile(clientSettings.offlineFile, errors):
     transition()

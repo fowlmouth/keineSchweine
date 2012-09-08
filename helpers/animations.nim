@@ -1,47 +1,46 @@
 import
-  sfml,
-  sg_assets
+  math,
+  sfml, chipmunk,
+  sg_assets, sfml_stuff
 type
   PAnimation* = ref TAnimation
   TAnimation* = object
     sprite*: PSprite
+    record*: PAnimationRecord
     delay*: float
-    delayy*: float
     index*: int
     direction*: int
-    maxCol*: int
-    frameW: int
     spriteRect*: TIntRect
     style*: TAnimationStyle
   TAnimationStyle* = enum
     AnimLoop = 0'i8, AnimBounce, AnimOnce
 
 proc free*(obj: PAnimation) =
-  if obj.sprite.isNil:
-    echo "sprite is nil -__-"
-  else:
-    obj.sprite.destroy()
+  obj.sprite.destroy()
+  obj.record = nil
 
 proc newAnimation*(src: PAnimationRecord; style = AnimLoop): PAnimation =
   new(result, free)
   result.sprite = src.spriteSheet.sprite.copy()
+  result.record = src
   result.delay = src.delay
-  result.delayy = src.delay
   result.index = 0
   result.direction = 1
-  result.maxCol = src.spriteSheet.cols - 1
-  result.frameW = src.spriteSheet.frameW
   result.spriteRect = result.sprite.getTextureRect()
   result.style = style
+proc newAnimation*(src: PAnimationRecord; style: TAnimationStyle; pos: TVector2f): PAnimation {.inline.} =
+  result = newAnimation(src, style)
+  result.sprite.setPosition(pos)
 
 proc next*(obj: PAnimation; dt: float): bool {.discardable.} =
   ## step the animation. Returns false if the object is out of frames
   result = true
   obj.delay -= dt
   if obj.delay <= 0.0:
-    obj.delay += obj.delayy
+    obj.delay += obj.record.delay
     obj.index += obj.direction
-    if obj.index > obj.maxCol or obj.index < 0:
+    #if obj.index > (obj.record.spriteSheet.cols - 1) or obj.index < 0:
+    if not(obj.index in 0..(obj.record.spriteSheet.cols - 1)):
       case obj.style
       of AnimOnce:
         return false
@@ -50,10 +49,20 @@ proc next*(obj: PAnimation; dt: float): bool {.discardable.} =
         obj.index += obj.direction * 2
       of AnimLoop:
         obj.index = 0
-    obj.spriteRect.left = obj.index.cint * obj.frameW.cint
+    obj.spriteRect.left = obj.index.cint * obj.record.spriteSheet.frameW.cint
     obj.sprite.setTextureRect obj.spriteRect
+
+proc setPos*(obj: PAnimation; pos: TVector) {.inline.} =
+  setPosition(obj.sprite, pos.floor())
+proc setPos*(obj: PAnimation; pos: TVector2f) {.inline.} =
+  setPosition(obj.sprite, pos)
+proc setAngle*(obj: PAnimation; radians: float) {.inline.} =
+  if obj.record.spriteSheet.rows > 1:
+    ## (rotation percent * rows).floor * frameheight
+    obj.spriteRect.top = (radians / TAU * obj.record.spriteSheet.rows.float).floor.cint * obj.record.spriteSheet.frameh.cint
+    echo(obj.spriteRect.top, " ", $obj.spriteRect)
+  else:
+    setRotation(obj.sprite, degrees(radians))
 
 proc draw*(window: PRenderWindow; obj: PAnimation) {.inline.} =
   window.draw(obj.sprite)
-    
-    

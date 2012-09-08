@@ -1,18 +1,18 @@
 ##Main State
 * Add GUI:
-  Player list
-  Chat box
-  Escape menu
+  * Player list
+  * Chat box
+  * Escape menu
 
 ##Lobby
 * Add GUI: 
-  options menu
-  key configuration
+  * options menu
+  * key configuration
 
 ## Animations
 * Need one-shot explosion animations
-  Thrusters (maybe a particle system instead)
-  Bullet trails
+  * Thrusters (maybe a particle system instead)
+  * Bullet trails
 
 ## Networking
 * zone server should verify users through the dir server or handle its own users
