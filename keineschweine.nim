@@ -302,7 +302,9 @@ proc useItem*(player: PPlayer; slot: int) =
   let item = player.items[slot]
   if item.canUse:
     item.cooldown += item.record.cooldown
-    liveBullets.add(newBullet(item.record.bullet, player))
+    let b = newBullet(item.record.bullet, player)
+    liveBullets.add(b)
+    sound_buffer.playSound(item.record.useSound, b.body.getPos)
 
 proc update*(obj: PPlayer) =
   if not obj.spectator:

@@ -504,7 +504,7 @@ proc importItem(data: PJsonNode): PItemRecord =
   data[2].getField("cooldown", result.cooldown)
   result.cooldown /= 1000.0  ##cooldown is stored in ms 
   
-  result.useSound = importSound(data, "useSound")
+  result.useSound = importSound(data[2], "useSound")
   
   case data[1].str.toLower
   of "projectile":
