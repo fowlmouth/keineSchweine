@@ -2,6 +2,7 @@ import nake
 nakeImports
 
 const 
+  GameAssets = "http://dl.dropbox.com/u/37533467/data-08-01-2012.7z"
   ExeName = "keineschweine"
   ServerDefines = "-d:NoSFML -d:NoChipmunk"
   TestBuildDefines = "-d:debugWeps -d:showFPS -d:moreNimrod -d:debugKeys -d:foo -d:recordMode --forceBuild"
@@ -60,4 +61,35 @@ task "clean", "cleanup generated files":
   var dirs = @["nimcache", "server"/"nimcache"]
   dirs.each(proc(x: var string) =
     if existsDir(x): removeDir(x))
+
+import httpclient
+task "download", "download game assets":
+  let path = expandFilename("data"/extractFilename(gameAssets))
+  if existsFile(path):
+    echo "The file already exists\n",
+      "[R]emove  [M]ove  [Q]uit"
+    case stdin.readLine.toLower
+    of "r":
+      removeFile path
+    of "m":
+      moveFile path, path/../(extractFilename(gameAssets)&"-old")
+    else:
+      quit 0
+  echo "Downloading..."
+  downloadFile gameAssets, path
+  echo "Download finished"
+  
+  let targetDir = parentDir(parentDir(path))
+  when defined(linux):
+    let z7 = findExe("7z")
+    if z7 == "":
+      quit "Could not find 7z"
+    if shell(z7, "t", path) != 0: ##note to self: make sure this is right
+      quit "Bad download"
+    echo "Unpacking..."
+    shell(z7, "x", "-w["&targetDir&"]", path)
+  else:
+    echo "I do not know how to unpack the data on this system. Perhaps you could ",
+      "fill this part in?"
+
 
