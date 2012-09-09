@@ -1,9 +1,9 @@
 import sfml_audio, sg_assets
-when defined(noSFML):
+when defined(NoSFML):
   {.error.}
 var
-  liveSounds*: seq[PSound] = @[]
-  deadSounds*: seq[PSound] = @[]
+  liveSounds: seq[PSound] = @[]
+  deadSounds: seq[PSound] = @[]
 
 proc playSound*(sound: PSoundRecord) =
   if sound.soundBuf.isNil: return
