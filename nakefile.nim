@@ -64,7 +64,9 @@ task "clean", "cleanup generated files":
 
 import httpclient
 task "download", "download game assets":
-  let path = expandFilename("data"/extractFilename(gameAssets))
+  var path = expandFilename("data")
+  path.add DirSep
+  path.add(extractFilename(gameAssets))
   if existsFile(path):
     echo "The file already exists\n",
       "[R]emove  [M]ove  [Q]uit"
@@ -75,7 +77,7 @@ task "download", "download game assets":
       moveFile path, path/../(extractFilename(gameAssets)&"-old")
     else:
       quit 0
-  echo "Downloading..."
+  echo "Downloading to ", path
   downloadFile gameAssets, path
   echo "Download finished"
   
