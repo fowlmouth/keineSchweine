@@ -63,7 +63,8 @@ task "clean", "cleanup generated files":
   dirs.each(proc(x: var string) =
     if existsDir(x): removeDir(x))
 
-import httpclient, zipfiles, times
+import httpclient, zipfiles, times, math
+randomize()
 task "download", "download game assets":
   var
     skipAssets = false
@@ -111,17 +112,22 @@ task "download", "download game assets":
     return
   path = extractFilename(BinLibs)
   downloadFile BinLibs, path 
-  echo "Downloaded dem libs"
-  ## this crashes, dunno why
-  when false:
-    block:
-      var z: TZipArchive
-      if not z.open(path, fmRead):
-        echo "Could not open zip, bad download?"
-        return
-      z.extractAll getCurrentDir()
-      z.close()
-      echo "Extracted the libs dir. Copy the ones you need to this dir."
+  echo "Downloaded dem libs ", path
+  when true: echo "Unpack it yourself, sorry."
+  else:  ## this crashes, dunno why
+    var 
+      z: TZipArchive
+      destDir = getCurrentDir()/("unzip"& $random(5000))
+    if not z.open(path, fmRead):
+      echo "Could not open zip, bad download?"
+      return
+    echo "Extracting to ", destDir
+    createDir destDir
+    #z.extractAll destDir
+    for f in z.walkFiles():
+      z.extractFile(f, destDir/f)
+    z.close()
+    echo "Extracted the libs dir. Copy the ones you need to this dir."
 
 task "zip-lib", "zip up the libs dir":
   var z: TZipArchive

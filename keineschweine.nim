@@ -163,17 +163,15 @@ proc free(obj: PLiveBullet) =
   obj.body.free
   obj.record = nil
 
-discard """template newExplosion(fromObj, record, angle = 0.0): stmt =
-  explosions.add(newAnimation(record, AnimOnce, fromObj.body.getPos.cp2sfml, angle))"""
-template newExplosion{
-  newExplosion(a, b) 
-}(a, b): stmt =
-  explosions.add(newAnimation(b, AnimOnce, a.body.getPos.cp2sfml, 0.0))
 
 template newExplosion{
-  newExplosion(a, b, c)
-}(a, b, c): stmt =
-  explosions.add(newAnimation(b, AnimOnce, a.body.getPos.cp2sfml, c))
+  newExplosion(obj, animation) 
+}(obj, animation): stmt =
+  explosions.add(newAnimation(animation, AnimOnce, obj.body.getPos.cp2sfml, 0.0))
+template newExplosion{
+  newExplosion(obj, animation, angle)
+}(obj, animation, angle): stmt =
+  explosions.add(newAnimation(animation, AnimOnce, obj.body.getPos.cp2sfml, angle))
 
 proc explode*(b: PLiveBullet) =
   space.removeShape b.shape
@@ -185,24 +183,23 @@ proc explode*(b: PLiveBullet) =
 proc bulletUpdate(body: PBody, gravity: TVector, damping, dt: CpFloat){.cdecl.} =
   body.updateVelocity(gravity, damping, dt)
 
+template getPhysical() =
+  result.body = space.addBody(newBody(
+    record.physics.mass,
+    record.physics.moment))
+  result.shape = space.addShape(
+    chipmunk.newCircleShape(
+      result.body,
+      record.physics.radius,
+      vectorZero))
+
 proc newBullet*(record: PBulletRecord; fromPlayer: PPlayer): PLiveBullet =
   new(result, free)
   result.anim = newAnimation(record.anim, AnimLoop)
   result.fromPlayer = fromPlayer
   result.lifetime = record.lifetime
   result.record = record
-  result.body = space.addBody(newBody(
-    record.physics.mass,
-    momentForCircle(
-      record.physics.mass.cdouble, 
-      0.0, 
-      record.physics.radius.cdouble, 
-      vector(0.0,0.0)
-    ) * 0.62))
-  result.shape = space.addShape(
-    chipmunk.newCircleShape(result.body, 
-                            record.physics.radius.cdouble, 
-                            vectorZero))
+  getPhysical()
   if fromPlayer == localPlayer:
     result.shape.setLayers(LPlayerFire)
   else:

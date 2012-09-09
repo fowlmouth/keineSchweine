@@ -70,6 +70,7 @@ type
   TPhysicsRecord* = object
     mass*: float
     radius*: float
+    moment*: float
   THandlingRecord = object
     thrust*, top_speed*: float
     reverse*, strafe*, rotation*: float
@@ -105,6 +106,7 @@ type
     Lobby, Transitioning, Field
 const
   TAU* = PI * 2.0
+  MomentMult* = 0.62 ## global moment of inertia multiplier
 var 
   cfg: PZoneSettings
   SpriteSheets* = initTable[string, PSpriteSheet](64)
@@ -115,12 +117,10 @@ var
   nameToBulletID*: TTable[string, int]
   activeState = Lobby
 
-proc newSprite(filename: string): PSpriteSheet
+proc newSprite(filename: string; errors: var seq[string]): PSpriteSheet
 proc load*(ss: PSpriteSheet): bool {.discardable.}
-#proc load*(ss: PSpriteSheet; errors: var seq[string]): bool {.discardable.}
-proc newSound(filename: string): PSoundRecord
+proc newSound(filename: string; errors: var seq[string]): PSoundRecord
 proc load*(s: PSoundRecord): bool {.discardable.}
-#proc load*(s: PSoundRecord; errors: var seq[string]): bool {.discardable.}
 
 proc validateSettings*(settings: PJsonNode; errors: var seq[string]): bool
 proc loadSettings*(rawJson: string, errors: var seq[string]): bool
@@ -131,17 +131,17 @@ proc fetchItm*(itm: string): PItemRecord
 proc fetchObj*(name: string): PObjectRecord
 proc fetchBullet(name: string): PBulletRecord
 
-proc importLevel(data: PJsonNode): PLevelSettings
-proc importVeh(data: PJsonNode): PVehicleRecord
-proc importObject(data: PJsonNode): PObjectRecord
-proc importItem(data: PJsonNode): PItemRecord
+proc importLevel(data: PJsonNode; errors: var seq[string]): PLevelSettings
+proc importVeh(data: PJsonNode; errors: var seq[string]): PVehicleRecord
+proc importObject(data: PJsonNode; errors: var seq[string]): PObjectRecord
+proc importItem(data: PJsonNode; errors: var seq[string]): PItemRecord
 proc importPhys(data: PJsonNode): TPhysicsRecord
-proc importAnim(data: PJsonNode): PAnimationRecord
+proc importAnim(data: PJsonNode; errors: var seq[string]): PAnimationRecord
 proc importHandling(data: PJsonNode): THandlingRecord
-proc importBullet(data: PJsonNode): PBulletRecord
+proc importBullet(data: PJsonNode; errors: var seq[string]): PBulletRecord
 proc importSoul(data: PJsonNode): TSoulRecord
-proc importExplosion(data: PJsonNode): TExplosionRecord
-proc importSound(data: PJsonNode; fieldName: string = nil): PSoundRecord
+proc importExplosion(data: PJsonNode; errors: var seq[string]): TExplosionRecord
+proc importSound(data: PJsonNode; errors: var seq[string]; fieldName: string = nil): PSoundRecord
 
 ## this is the only pipe between lobby and main.nim
 proc getActiveState*(): TGameState =
@@ -153,10 +153,13 @@ proc doneWithSaidTransition*() =
   assert activeState == Transitioning, "Finished() called from a state other than transitioning!"
   activeState = Field
 
+##at this point none of these should ever be freed
 proc free*(obj: PZoneSettings) =
-  nil
+  echo "Free'd zone settings"
 proc free*(obj: PSpriteSheet) =
-  echo("Free'd "&obj.file)
+  echo "Free'd ", obj.file
+proc free*(obj: PSoundRecord) =
+  echo "Free'd ", obj.file
 
 proc loadAllAssets*() =
   var l = 0
@@ -178,27 +181,31 @@ iterator playableVehicles*(): PVehicleRecord =
     if v.playable:
       yield v
 
-proc newSprite(filename: string): PSpriteSheet =
-  if hasKey(SpriteSheets, filename):
-    return SpriteSheets[filename]
-  let path = "data/gfx"/filename
-  if not existsFile(path):
-    raise newException(EIO, "File does not exist: "&path)
-  elif filename =~ re"\S+_(\d+)x(\d+)\.\S\S\S":
+template cacheImpl(procName, cacheName, resultType: expr; body: stmt) {.dirty.} =
+  proc procName*(filename: string; errors: var seq[string]): resulttype =
+    if hasKey(cacheName, filename):
+      return cacheName[filename]
     new(result, free)
-    result.file = path
-    result.framew = strutils.parseInt(matches[0])
-    result.frameh = strutils.parseInt(matches[1])
-    SpriteSheets[filename] = result
-  else:
-    raise newException(EIO, "bad file: "&filename&" must be in format name_WxH.png")
+    body
+    cacheName[filename] = result
 
-proc newSound(filename: string): PSoundRecord =
-  if hasKey(SoundCache, filename): 
-    return SoundCache[filename]
-  new(result)
+template checkFile(path: expr): stmt {.dirty, immediate.} =
+  if not existsFile(path):
+    errors.add("File missing: "& path)
+
+cacheImpl newSprite, SpriteSheets, PSpriteSheet:
   result.file = filename
-  SoundCache[filename] = result
+  if not(filename =~ re"\S+_(\d+)x(\d+)\.\S\S\S"):
+    errors.add "Bad file: "&filename&" must be in format name_WxH.png"
+    return
+  result.framew = strutils.parseInt(matches[0])
+  result.frameh = strutils.parseInt(matches[1])
+  checkFile("data/gfx"/result.file)
+
+cacheImpl newSound, SoundCache, PSoundRecord:
+  result.file = filename
+  checkFile("data/sfx"/result.file)
+
 
 when defined(NoSFML):
   proc load*(ss: PSpriteSheet): bool =
@@ -213,7 +220,7 @@ else:
   proc load*(ss: PSpriteSheet): bool =
     if not ss.sprite.isNil: 
       return
-    var image = sfml.newImage(ss.file)
+    var image = sfml.newImage("data/gfx/"/ss.file)
     if image == nil:
       echo "Image could not be loaded"
       return
@@ -229,7 +236,7 @@ else:
     result = true
   proc load*(s: PSoundRecord): bool =
     s.soundBuf = newSoundBuffer("data/sfx"/s.file)
-    if not s.isNil:
+    if not s.soundBuf.isNil:
       result = true
 
 template addError(e: expr): stmt {.immediate.} =
@@ -294,7 +301,7 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
     free(cfg)
     cfg = nil
   new(cfg, free)
-  cfg.levelSettings = importLevel(settings)
+  cfg.levelSettings = importLevel(settings, errors)
   cfg.vehicles = @[]
   cfg.items = @[]
   cfg.objects = @[]
@@ -307,7 +314,7 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
     vID = 0'i16
     bID = 0'i16
   for vehicle in settings["vehicles"].items:
-    var veh = importVeh(vehicle)
+    var veh = importVeh(vehicle, errors)
     veh.id = vID
     cfg.vehicles.add veh
     nameToVehID[veh.name] = veh.id
@@ -315,13 +322,13 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
   vID = 0
   if settings.existsKey("bullets"):
     for blt in settings["bullets"].items:
-      var bullet = importBullet(blt)
+      var bullet = importBullet(blt, errors)
       bullet.id = bID
       cfg.bullets.add bullet
       nameToBulletID[bullet.name] = bullet.id
       inc bID
   for item in settings["items"].items:
-    var itm = importItem(item)
+    var itm = importItem(item, errors)
     itm.id = vID
     cfg.items.add itm
     nameToItemID[itm.name] = itm.id
@@ -335,12 +342,12 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
       inc bID
   vID = 0
   for obj in settings["objects"].items:
-    var o = importObject(obj)
+    var o = importObject(obj, errors)
     o.id = vID
     cfg.objects.add o
     nameToObjID[o.name] = o.id
     inc vID
-  result = true
+  result = (errors.len == 0)
 
 proc `$`*(obj: PSpriteSheet): string =
   return "<Sprite $1 ($2x$3) $4 rows $5 cols>" % [obj.file, $obj.framew, $obj.frameh, $obj.rows, $obj.cols]
@@ -384,13 +391,13 @@ template checkKey(node: expr; key: string): stmt =
   if not existsKey(node, key):
     return
 
-proc importTrail(data: PJsonNode): TTrailRecord =
+proc importTrail(data: PJsonNode; errors: var seq[string]): TTrailRecord =
   checkKey(data, "trail")
-  result.anim = importAnim(data["trail"])
+  result.anim = importAnim(data["trail"], errors)
   result.timer = 1000.0
   getField(data["trail"], "timer", result.timer)
   result.timer /= 1000.0
-proc importLevel(data: PJsonNode): PLevelSettings =
+proc importLevel(data: PJsonNode; errors: var seq[string]): PLevelSettings =
   new(result)
   result.size = vec2i(5000, 5000)
   result.starfield = @[]
@@ -402,18 +409,17 @@ proc importLevel(data: PJsonNode): PLevelSettings =
     result.size.y = level["size"][1].num.cint
   if level.existsKey("starfield"):
     for star in level["starfield"].items:
-      result.starfield.add(newSprite(star.str))
+      result.starfield.add(newSprite(star.str, errors))
 proc importPhys(data: PJsonNode): TPhysicsRecord =
   result.radius = 20.0
   result.mass = 10.0
   
-  checkKey(data, "physics")
-  if data["physics"].kind != JObject:
-    return
-  
-  let phys = data["physics"]
-  phys.getField("radius", result.radius)
-  phys.getField("mass", result.mass)
+  if data.existsKey("physics") and data["physics"].kind == JObject:
+    let phys = data["physics"]
+    phys.getField("radius", result.radius)
+    phys.getField("mass", result.mass)
+  when not defined(NoChipmunk):
+    result.moment = momentForCircle(result.mass, 0.0, result.radius, vectorZero) * MomentMult
 proc importHandling(data: PJsonNode): THandlingRecord =
   result.thrust = 45.0
   result.topSpeed = 100.0 #unused
@@ -431,7 +437,7 @@ proc importHandling(data: PJsonNode): THandlingRecord =
   hand.getField("reverse", result.reverse)
   hand.getField("strafe", result.strafe)
   hand.getField("rotation", result.rotation)
-proc importAnim(data: PJsonNode): PAnimationRecord =
+proc importAnim(data: PJsonNode, errors: var seq[string]): PAnimationRecord =
   new(result)
   result.angle = 0.0
   result.delay = 1000.0
@@ -439,11 +445,11 @@ proc importAnim(data: PJsonNode): PAnimationRecord =
   
   checkKey(data, "anim")
   if data["anim"].kind == JString:
-    result.spriteSheet = newSprite(data["anim"].str)
+    result.spriteSheet = newSprite(data["anim"].str, errors)
     return
   let anim = data["anim"]
   if anim.existsKey("file"): 
-    result.spriteSheet = newSprite(anim["file"].str)
+    result.spriteSheet = newSprite(anim["file"].str, errors)
   anim.getField("angle", result.angle) 
   result.angle = radians(result.angle) ## comes in as degrees 
   anim.getField("delay", result.delay) 
@@ -455,56 +461,58 @@ proc importSoul(data: PJsonNode): TSoulRecord =
   let soul = data["soul"]
   soul.getField("energy", result.energy)
   soul.getField("health", result.health)
-proc importExplosion(data: PJsonNode): TExplosionRecord =
+proc importExplosion(data: PJsonNode; errors: var seq[string]): TExplosionRecord =
   checkKey(data, "explode")
   let expl = data["explode"]
-  result.anim = importAnim(expl)
-  result.sound = importSound(expl, "sound")
-proc importSound*(data: PJsonNode; fieldName: string = nil): PSoundRecord =
+  result.anim = importAnim(expl, errors)
+  result.sound = importSound(expl, errors, "sound")
+proc importSound*(data: PJsonNode; errors: var seq[string]; fieldName: string = nil): PSoundRecord =
   if data.kind == JObject:
     checkKey(data, fieldName)
-    result = newSound(data[fieldName].str)
+    result = newSound(data[fieldName].str, errors)
   elif data.kind == JString:
-    result = newSound(data.str)
+    result = newSound(data.str, errors)
 
-proc importVeh(data: PJsonNode): PVehicleRecord =
+proc importVeh(data: PJsonNode; errors: var seq[string]): PVehicleRecord =
   new(result)
   result.playable = false
   if data.kind != JArray or data.len != 2 or 
     (data.kind == JArray and 
       (data[0].kind != JString or data[1].kind != JObject)):
     result.name = "(broken)"
+    errors.add "Vehicle record is malformed"
     return
   var vehData = data[1]
   result.name = data[0].str
-  result.anim = importAnim(vehdata)
+  result.anim = importAnim(vehdata, errors)
   result.physics = importPhys(vehdata)
   result.handling = importHandling(vehdata)
   vehdata.getField("playable", result.playable)
   if result.anim.spriteSheet.isNil and result.playable:
     result.playable = false
-proc importObject(data: PJsonNode): PObjectRecord =
+proc importObject(data: PJsonNode; errors: var seq[string]): PObjectRecord =
   new(result)
   if data.kind != JArray or data.len != 2:
     result.name = "(broken)"
     return
   result.name = data[0].str
-  result.anim = importAnim(data[1])
+  result.anim = importAnim(data[1], errors)
   result.physics = importPhys(data[1])
-proc importItem(data: PJsonNode): PItemRecord =
+proc importItem(data: PJsonNode; errors: var seq[string]): PItemRecord =
   new(result)
   if data.kind != JArray or data.len != 3:
     result.name = "(broken)"
+    errors.add "Item record is malformed"
     return
   result.name = data[0].str
-  result.anim = importAnim(data[2])
+  result.anim = importAnim(data[2], errors)
   result.physics = importPhys(data[2])
   
   result.cooldown = 100.0 
   data[2].getField("cooldown", result.cooldown)
   result.cooldown /= 1000.0  ##cooldown is stored in ms 
   
-  result.useSound = importSound(data[2], "useSound")
+  result.useSound = importSound(data[2], errors, "useSound")
   
   case data[1].str.toLower
   of "projectile":
@@ -514,17 +522,17 @@ proc importItem(data: PJsonNode): PItemRecord =
     elif data[2]["bullet"].kind == JInt:
       result.bullet = cfg.bullets[data[2]["bullet"].num.int]
     elif data[2]["bullet"].kind == JObject: 
-      result.bullet = importBullet(data[2]["bullet"])
+      result.bullet = importBullet(data[2]["bullet"], errors)
     else:
-      echo "UNKNOWN BULLET TYPE for item ", result.name
-      quit 1
+      errors.add "UNKNOWN BULLET TYPE for item "& result.name
   of "ammo":
     result.kind = Ammo
   of "utility":
     nil
   else:
-    echo "Invalid item type \"", data[1].str, "\" for item ", result.name
-proc importBullet(data: PJsonNode): PBulletRecord =
+    errors.add "Invalid item type \""& data[1].str &"\" for item "& result.name
+
+proc importBullet(data: PJsonNode; errors: var seq[string]): PBulletRecord =
   new(result)
   result.id = -1
   
@@ -535,10 +543,10 @@ proc importBullet(data: PJsonNode): PBulletRecord =
   elif data.kind == JObject:
     bdata = data
   else: 
-    echo "I'm a broken bullet :("
-    quit 1
+    errors.add "Malformed bullet record"
+    return
   
-  result.anim = importAnim(bdata)
+  result.anim = importAnim(bdata, errors)
   result.physics = importPhys(bdata)
   
   result.lifetime = 2000.0
@@ -549,5 +557,5 @@ proc importBullet(data: PJsonNode): PBulletRecord =
   getField(bdata, "baseVelocity", result.baseVelocity)
   result.lifetime /= 1000.0 ## lifetime is stored as milliseconds
   result.inheritVelocity /= 1000.0 ## inherit velocity 1000 = 1.0 (100%)
-  result.explosion = importExplosion(bdata)
-  result.trail = importTrail(bdata)
+  result.explosion = importExplosion(bdata, errors)
+  result.trail = importTrail(bdata, errors)
