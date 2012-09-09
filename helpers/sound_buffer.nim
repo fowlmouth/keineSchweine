@@ -9,7 +9,7 @@ var
   deadSounds: seq[PSound] = @[]
 
 proc playSound*(sound: PSoundRecord, pos: TVector) =
-  if sound.soundBuf.isNil: return
+  if sound.isNil or sound.soundBuf.isNil: return
   var s: PSound
   if deadSounds.len == 0:
     s = sfml_audio.newSound()

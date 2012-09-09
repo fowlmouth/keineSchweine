@@ -15,11 +15,15 @@ type
   TAnimationStyle* = enum
     AnimLoop = 0'i8, AnimBounce, AnimOnce
 
+proc setPos*(obj: PAnimation; pos: TVector) {.inline.}
+proc setPos*(obj: PAnimation; pos: TVector2f) {.inline.}
+proc setAngle*(obj: PAnimation; radians: float) {.inline.}
+
 proc free*(obj: PAnimation) =
   obj.sprite.destroy()
   obj.record = nil
 
-proc newAnimation*(src: PAnimationRecord; style = AnimLoop): PAnimation =
+proc newAnimation*(src: PAnimationRecord; style: TAnimationStyle): PAnimation =
   new(result, free)
   result.sprite = src.spriteSheet.sprite.copy()
   result.record = src
@@ -28,9 +32,11 @@ proc newAnimation*(src: PAnimationRecord; style = AnimLoop): PAnimation =
   result.direction = 1
   result.spriteRect = result.sprite.getTextureRect()
   result.style = style
-proc newAnimation*(src: PAnimationRecord; style: TAnimationStyle; pos: TVector2f): PAnimation {.inline.} =
+proc newAnimation*(src: PAnimationRecord; style: TAnimationStyle;
+                    pos: TVector2f; angle: float): PAnimation =
   result = newAnimation(src, style)
-  result.sprite.setPosition(pos)
+  result.setPos pos
+  setAngle(result, angle)
 
 proc next*(obj: PAnimation; dt: float): bool {.discardable.} =
   ## step the animation. Returns false if the object is out of frames
@@ -52,17 +58,18 @@ proc next*(obj: PAnimation; dt: float): bool {.discardable.} =
     obj.spriteRect.left = obj.index.cint * obj.record.spriteSheet.frameW.cint
     obj.sprite.setTextureRect obj.spriteRect
 
-proc setPos*(obj: PAnimation; pos: TVector) {.inline.} =
+proc setPos*(obj: PAnimation; pos: TVector) =
   setPosition(obj.sprite, pos.floor())
-proc setPos*(obj: PAnimation; pos: TVector2f) {.inline.} =
+proc setPos*(obj: PAnimation; pos: TVector2f) =
   setPosition(obj.sprite, pos)
-proc setAngle*(obj: PAnimation; radians: float) {.inline.} =
+proc setAngle*(obj: PAnimation; radians: float)  =
+  let rads = (radians + obj.record.angle).wmod(TAU)
   if obj.record.spriteSheet.rows > 1:
     ## (rotation percent * rows).floor * frameheight
-    obj.spriteRect.top = ((radians + obj.record.angle).wmod(TAU) / TAU * obj.record.spriteSheet.rows.float).floor.cint * obj.record.spriteSheet.frameh.cint
+    obj.spriteRect.top = (rads / TAU * obj.record.spriteSheet.rows.float).floor.cint * obj.record.spriteSheet.frameh.cint
     obj.sprite.setTextureRect obj.spriteRect
   else:
-    setRotation(obj.sprite, degrees(radians)) #stupid sfml, who uses degrees these days? -__-
+    setRotation(obj.sprite, degrees(rads)) #stupid sfml, who uses degrees these days? -__-
 
 proc draw*(window: PRenderWindow; obj: PAnimation) {.inline.} =
   window.draw(obj.sprite)

@@ -48,6 +48,7 @@ type
     anim*: PAnimationRecord
     physics*: TPhysicsRecord ##apply when the item is dropped in the arena
     cooldown*: float
+    energyCost*: float
     useSound*: PSoundRecord
     case kind*: TItemKind
     of Projectile: 
@@ -62,7 +63,10 @@ type
     physics*: TPhysicsRecord
     lifetime*, inheritVelocity*, baseVelocity*: float
     explosion*: TExplosionRecord
-    trail*: PAnimationRecord
+    trail*: TTrailRecord
+  TTrailRecord* = object
+    anim*: PAnimationRecord
+    timer*: float ##how often it should be created
   TPhysicsRecord* = object
     mass*: float
     radius*: float
@@ -113,8 +117,10 @@ var
 
 proc newSprite(filename: string): PSpriteSheet
 proc load*(ss: PSpriteSheet): bool {.discardable.}
+#proc load*(ss: PSpriteSheet; errors: var seq[string]): bool {.discardable.}
 proc newSound(filename: string): PSoundRecord
 proc load*(s: PSoundRecord): bool {.discardable.}
+#proc load*(s: PSoundRecord; errors: var seq[string]): bool {.discardable.}
 
 proc validateSettings*(settings: PJsonNode; errors: var seq[string]): bool
 proc loadSettings*(rawJson: string, errors: var seq[string]): bool
@@ -378,6 +384,12 @@ template checkKey(node: expr; key: string): stmt =
   if not existsKey(node, key):
     return
 
+proc importTrail(data: PJsonNode): TTrailRecord =
+  checkKey(data, "trail")
+  result.anim = importAnim(data["trail"])
+  result.timer = 1000.0
+  getField(data["trail"], "timer", result.timer)
+  result.timer /= 1000.0
 proc importLevel(data: PJsonNode): PLevelSettings =
   new(result)
   result.size = vec2i(5000, 5000)
@@ -512,7 +524,6 @@ proc importItem(data: PJsonNode): PItemRecord =
     nil
   else:
     echo "Invalid item type \"", data[1].str, "\" for item ", result.name
-
 proc importBullet(data: PJsonNode): PBulletRecord =
   new(result)
   result.id = -1
@@ -539,3 +550,4 @@ proc importBullet(data: PJsonNode): PBulletRecord =
   result.lifetime /= 1000.0 ## lifetime is stored as milliseconds
   result.inheritVelocity /= 1000.0 ## inherit velocity 1000 = 1.0 (100%)
   result.explosion = importExplosion(bdata)
+  result.trail = importTrail(bdata)

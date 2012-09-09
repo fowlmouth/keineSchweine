@@ -90,12 +90,34 @@
   "physics":{
    "mass":4,
    "radius":8},
+  "trail":{
+   "anim":{
+    "file":"bullets/EBombTrail_20x20.png",
+    "delay":20
+   },
+   "timer":90},
   "explode":{
    "anim":{
     "file":"explosions/laserHit2_64x64.png",
     "delay":15},
    "sound":"ebomb3.wav"}
-  }]
+  }],
+ ["beam", {
+  "anim":{
+   "file":"bullets/BeamLarge_48x48.png",
+   "angle":90},
+  "lifetime":1000,
+  "inheritVelocity":750,
+  "baseVelocity":380,
+  "physics":{
+   "mass":2,
+   "radius":4},
+  "trail":{
+   "anim":{
+    "file":"bullets/BeamTrail_48x48.png",
+    "angle":90,
+    "delay":30},
+   "timer":50}}]
 ],
 "items":[
  ["Neutron Bomb", "Projectile", {
@@ -103,6 +125,12 @@
   "cooldown":650,
   "cost":350,
   "useSound":"bomb5.wav"
+  }],
+ ["Dem Lasers", "Projectile", {
+  "cooldown":230,
+  "cost":550,
+  "useSound":"EnergyWeaponC.wav",
+  "bullet":"beam"
   }],
  ["Mass Driver", "Projectile", {
   "cooldown":75,

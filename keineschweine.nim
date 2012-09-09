@@ -22,6 +22,7 @@ type
     anim*: PAnimation
     record*: PBulletRecord
     fromPlayer*: PPlayer
+    trailDelay*: float
     body: chipmunk.PBody
     shape: chipmunk.PShape
 const
@@ -162,8 +163,17 @@ proc free(obj: PLiveBullet) =
   obj.body.free
   obj.record = nil
 
-template newExplosion(fromObj, record): stmt =
-  explosions.add(newAnimation(record, AnimOnce, fromObj.body.getPos.cp2sfml))
+discard """template newExplosion(fromObj, record, angle = 0.0): stmt =
+  explosions.add(newAnimation(record, AnimOnce, fromObj.body.getPos.cp2sfml, angle))"""
+template newExplosion{
+  newExplosion(a, b) 
+}(a, b): stmt =
+  explosions.add(newAnimation(b, AnimOnce, a.body.getPos.cp2sfml, 0.0))
+
+template newExplosion{
+  newExplosion(a, b, c)
+}(a, b, c): stmt =
+  explosions.add(newAnimation(b, AnimOnce, a.body.getPos.cp2sfml, c))
 
 proc explode*(b: PLiveBullet) =
   space.removeShape b.shape
@@ -171,10 +181,6 @@ proc explode*(b: PLiveBullet) =
   if not b.record.explosion.anim.isNil:
     newExplosion(b, b.record.explosion.anim)
   playSound(b.record.explosion.sound, b.body.getPos())
-  discard """if not b.record.explosion.sound.soundBuf.isNil:
-    var s = sfml_audio.newSound()
-    s.setBuffer(b.record.explosion.sound.soundBuf)
-    s.play()"""
 
 proc bulletUpdate(body: PBody, gravity: TVector, damping, dt: CpFloat){.cdecl.} =
   body.updateVelocity(gravity, damping, dt)
@@ -218,6 +224,11 @@ proc update*(b: PLiveBullet; dt: float): bool =
   if b.lifetime <= 0.0:
     b.explode()
     return true
+  b.trailDelay -= dt
+  if b.trailDelay <= 0.0:
+    b.trailDelay += b.record.trail.timer
+    if b.record.trail.anim.isNil: return
+    newExplosion(b, b.record.trail.anim)
 proc draw*(window: PRenderWindow; b: PLiveBullet) {.inline.} =
   draw(window, b.anim.sprite)
 
@@ -332,6 +343,7 @@ proc unspec() =
     when defined(debugWeps):
       localPlayer.addItem("Mass Driver")
       localPlayer.addItem("Neutron Bomb")
+      localPlayer.additem("Dem Lasers")
 proc spec() =
   setMyVehicle nil
   localPlayer.spectator = true
@@ -550,12 +562,14 @@ proc mainRender() =
     for star in stars:
       window.draw(star.sprite)
   window.draw(localPlayer)
+  
   for b in localBots:
     window.draw(b)
   for o in objects:
     window.draw(o)
-  for b in liveBullets: window.draw(b)
+  
   for b in explosions: window.draw(b)
+  for b in liveBullets: window.draw(b)
   
   when defined(Foo):
     window.draw(mouseSprite)
