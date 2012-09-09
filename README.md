@@ -4,18 +4,16 @@ Just a dumb little game
 
 ### Dependencies
 
-* Nimrod 0.8.15, until this version is released I'm working off Nimrod HEAD
-* SFML 2.0 (git), same for SFML and CSFML 
-* CSFML 2.0 (git)
-* Chipmunk 6.1.1
+* Nimrod 0.8.15, Until this version is released I'm working off Nimrod HEAD: https://github.com/Araq/Nimrod
+* SFML 2.0 (git), https://github.com/LaurentGomila/SFML
+* CSFML 2.0 (git), https://github.com/LaurentGomila/CSFML
+* Chipmunk 6.1.1 http://chipmunk-physics.net/downloads.php
 
 ### How to build?
 
-* `git clone git://github.com/fowlmouth/keineSchweine.git somedir`
+* `git clone --recursive git://github.com/fowlmouth/keineSchweine.git somedir`
 * `cd somedir`
-* `git submodule init`
-* `git submodule update`
-* `nimrod c -r keineschweine` or `nimrod c -r nakefile test`
+*  `nimrod c -r nakefile test` or `nimrod c -r keineschweine && ./keineschweine`
 
 ### Download the game data
 
