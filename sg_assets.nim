@@ -1,5 +1,5 @@
 import
-  re, json, strutils, tables, math, os
+  re, json, strutils, tables, math, os, math_helpers
 
 when defined(NoSFML):
   import server_utils
@@ -103,13 +103,18 @@ const
 var 
   cfg: PZoneSettings
   SpriteSheets* = initTable[string, PSpriteSheet](64)
+  SoundCache* = initTable[string, PSoundRecord](64)
   nameToVehID*: TTable[string, int]
   nameToItemID*: TTable[string, int]
   nameToObjID*: TTable[string, int]
   nameToBulletID*: TTable[string, int]
   activeState = Lobby
-proc newSprite*(filename: string): PSpriteSheet
+
+proc newSprite(filename: string): PSpriteSheet
 proc load*(ss: PSpriteSheet): bool {.discardable.}
+proc newSound(filename: string): PSoundRecord
+proc load*(s: PSoundRecord): bool {.discardable.}
+
 proc validateSettings*(settings: PJsonNode; errors: var seq[string]): bool
 proc loadSettings*(rawJson: string, errors: var seq[string]): bool
 proc loadSettingsFromFile*(filename: string, errors: var seq[string]): bool
@@ -160,7 +165,7 @@ iterator playableVehicles*(): PVehicleRecord =
     if v.playable:
       yield v
 
-proc newSprite*(filename: string): PSpriteSheet =
+proc newSprite(filename: string): PSpriteSheet =
   if hasKey(SpriteSheets, filename):
     return SpriteSheets[filename]
   let path = "data/gfx"/filename
@@ -175,10 +180,25 @@ proc newSprite*(filename: string): PSpriteSheet =
   else:
     raise newException(EIO, "bad file: "&filename&" must be in format name_WxH.png")
 
+proc newSound(filename: string): PSoundRecord =
+  if hasKey(SoundCache, filename): 
+    return SoundCache[filename]
+  when defined(noSFML):
+    new(result)
+    result.file = filename
+    SoundCache[filename] = result
+  else:
+    new(result)
+    result.soundBuf = newSoundBuffer("data/sfx"/filename)
+    SoundCache[filename] = result
+
 when defined(NoSFML):
   proc load*(ss: PSpriteSheet): bool =
     if not ss.contents.unpackedSize == 0: return
     ss.contents = checksumFile(ss.file)
+    result = true
+  proc load*(s: PSoundRecord): bool =
+    s.contents = checksumFile(s.file)
     result = true
 else:
   proc load*(ss: PSpriteSheet): bool =
@@ -198,6 +218,8 @@ else:
     ss.sprite.setTextureRect(intrect(0, 0, ss.framew.cint, ss.frameh.cint))
     ss.sprite.setOrigin(vec2f(ss.framew / 2, ss.frameh / 2))
     result = true
+  proc load*(s: PSoundRecord): bool =
+    nil
 
 template addError(e: expr): stmt {.immediate.} =
   errors.add(e)
@@ -424,16 +446,14 @@ proc importExplosion(data: PJsonNode): TExplosionRecord =
 
 when defined(NoSFML):
   proc importSound*(data: PJsonNode; fieldName: string = nil): PSoundRecord =
-    nil
+    new(result)
 else:
   proc importSound*(data: PJsonNode; fieldName: string = nil): PSoundRecord =
     if data.kind == JObject:
       checkKey(data, fieldName)
-      new(result)
-      result.soundBuf = newSoundBuffer("data/sfx/"/data[fieldName].str)
+      result = newSound(data[fieldName].str)
     elif data.kind == JString:
-      new(result)
-      result.soundBuf = newSoundBuffer("data/sfx/"/data.str)
+      result = newSound(data.str)
 
 proc importVeh(data: PJsonNode): PVehicleRecord =
   new(result)
