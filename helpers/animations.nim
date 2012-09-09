@@ -59,10 +59,11 @@ proc setPos*(obj: PAnimation; pos: TVector2f) {.inline.} =
 proc setAngle*(obj: PAnimation; radians: float) {.inline.} =
   if obj.record.spriteSheet.rows > 1:
     ## (rotation percent * rows).floor * frameheight
-    obj.spriteRect.top = (radians / TAU * obj.record.spriteSheet.rows.float).floor.cint * obj.record.spriteSheet.frameh.cint
+    obj.spriteRect.top = ((radians + obj.record.angle).wmod(TAU) / TAU * obj.record.spriteSheet.rows.float).floor.cint * obj.record.spriteSheet.frameh.cint
+    obj.sprite.setTextureRect obj.spriteRect
     echo(obj.spriteRect.top, " ", $obj.spriteRect)
   else:
-    setRotation(obj.sprite, degrees(radians))
+    setRotation(obj.sprite, degrees(radians)) #stupid sfml, who uses degrees these days? -__-
 
 proc draw*(window: PRenderWindow; obj: PAnimation) {.inline.} =
   window.draw(obj.sprite)

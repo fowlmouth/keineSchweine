@@ -95,10 +95,12 @@
   }],
  ["Mass Driver", "Projectile", {
   "bullet":{
-   "anim":"bullets/MassDriver_14x14.png",
+   "anim":{
+     "file":"bullets/MassDriver_14x14.png",
+     "angle":90},
    "lifetime":4000,
    "inheritVelocity":1000,
-   "baseVelocity":15,
+   "baseVelocity":157,
    "physics":{
     "mass":30,
     "radius":1},

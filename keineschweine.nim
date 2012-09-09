@@ -188,10 +188,13 @@ proc newBullet*(record: PBulletRecord; fromPlayer: PPlayer): PLiveBullet =
     chipmunk.newCircleShape(result.body, 
                             record.physics.radius.cdouble, 
                             vectorZero))
-  let fireAngle = vectorForAngle(fromPlayer.vehicle.body.getAngle())
-  result.body.setPos(fromPlayer.vehicle.body.getPos() + (fireAngle * fromPlayer.vehicle.shape.getCircleRadius()))
+  let 
+    fireAngle = fromPlayer.vehicle.body.getAngle()
+    fireAngleV = vectorForAngle(fireAngle)
+  result.body.setAngle fireAngle
+  result.body.setPos(fromPlayer.vehicle.body.getPos() + (fireAngleV * fromPlayer.vehicle.shape.getCircleRadius()))
   #result.body.velocityFunc = bulletUpdate
-  result.body.setVel((fromPlayer.vehicle.body.getVel() * record.inheritVelocity) + (fireAngle * record.baseVelocity))
+  result.body.setVel((fromPlayer.vehicle.body.getVel() * record.inheritVelocity) + (fireAngleV * record.baseVelocity))
 
 proc update*(b: PLiveBullet; dt: float): bool =
   b.lifetime -= dt
@@ -265,7 +268,7 @@ proc newPlayer*(alias: string = "poo"): PPlayer =
   result.alias     = alias
   result.nameTag   = newNameTag(result.alias)
   result.items     = @[]
-proc updateItems*(player: PPlayer, dt: float): PPlayer =
+proc updateItems*(player: PPlayer, dt: float) =
   for i in items(player.items):
     update(i, dt)
 proc addItem*(player: PPlayer; name: string) =
@@ -274,6 +277,7 @@ proc fireItem*(player: PPlayer; slot: int) =
   if slot > player.items.len - 1: return
   let item = player.items[slot]
   if item.canFire:
+    item.cooldown += item.record.cooldown
     liveBullets.add(newBullet(item.record.bullet, player))
 
 proc update*(obj: PPlayer) =
@@ -350,9 +354,16 @@ proc update(obj: PGameObject; dt: float) =
 
 proc toggleShipSelect() = 
   showShipSelect = not showShipSelect
+proc handleLClick() =
+  let pos = input_helpers.getMousePos()
+  if showShipSelect:
+    shipSelect.click(pos)
+  if localPlayer.spectator:
+    specGui.click(pos)
 
 ingameClient.registerHandler(KeyF12, down, proc() = toggleSpec())
 ingameClient.registerHandler(KeyF11, down, toggleShipSelect)
+ingameClient.registerHandler(MouseLeft, down, handleLClick)
 when defined(recordMode):
   if not existsDir("data/snapshots"):
     createDir("data/snapshots")
@@ -416,7 +427,7 @@ when defined(DebugKeys):
     mouseJoint.errorBias = pow(1.0 - 0.15, 60))
 
 var specCameraSpeed = 5.0
-specInputClient.registerHandler(MouseLeft, down, proc() = specGui.click(getMousePos()))
+specInputClient.registerHandler(MouseLeft, down, handleLClick)
 specInputClient.registerHandler(KeyF11, down, toggleShipSelect)
 specInputClient.registerHandler(KeyF12, down, proc() = toggleSpec())
 specInputClient.registerHandler(KeyLShift, down, proc() = specCameraSpeed *= 2)
@@ -458,7 +469,9 @@ proc mainUpdate(dt: float) =
       localPlayer.fireItem 0
     worldView.setCenter(activeVehicle.body.getPos.floor)#cp2sfml)
   
-  if localPlayer != nil: localPlayer.update()
+  if localPlayer != nil: 
+    localPlayer.update()
+    localPlayer.updateItems(dt)
   for b in localBots:
     b.update()
   

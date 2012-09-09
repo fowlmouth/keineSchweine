@@ -47,6 +47,7 @@ type
     name*: string
     anim*: PAnimationRecord
     physics*: TPhysicsRecord ##apply when the item is dropped in the arena
+    cooldown*: float
     case kind*: TItemKind
     of Projectile: 
       bullet*: PBulletRecord
@@ -424,6 +425,10 @@ proc importItem(data: PJsonNode): PItemRecord =
   result.name = data[0].str
   result.anim = importAnim(data[2])
   result.physics = importPhys(data[2])
+  
+  result.cooldown = 100.0 
+  data[2].getField("cooldown", result.cooldown)
+  result.cooldown /= 1000.0  ##cooldown is stored in ms 
   
   case data[1].str.toLower
   of "projectile":
