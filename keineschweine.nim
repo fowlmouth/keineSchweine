@@ -167,7 +167,7 @@ proc free(obj: PLiveBullet) =
 template newExplosion{
   newExplosion(obj, animation) 
 }(obj, animation): stmt =
-  explosions.add(newAnimation(animation, AnimOnce, obj.body.getPos.cp2sfml, 0.0))
+  explosions.add(newAnimation(animation, AnimOnce, obj.body.getPos.cp2sfml, obj.body.getAngle))
 template newExplosion{
   newExplosion(obj, animation, angle)
 }(obj, animation, angle): stmt =
@@ -343,6 +343,9 @@ proc unspec() =
       localPlayer.addItem("Mass Driver")
       localPlayer.addItem("Neutron Bomb")
       localPlayer.additem("Dem Lasers")
+      localPlayer.addItem("Mold Spore Beam")
+      localPlayer.addItem("Genericorp Mine")
+      localPlayer.addItem("Gravitic Bomb")
 proc spec() =
   setMyVehicle nil
   localPlayer.spectator = true
@@ -499,6 +502,14 @@ proc mainUpdate(dt: float) =
       localPlayer.useItem 1
     if keyPressed(KeyQ):
       localPlayer.useItem 2
+    if keyPressed(KeyW):
+      localPlayer.useItem 3
+    if Keypressed(keyA):
+      localPlayer.useItem 4
+    if keyPressed(sfml.KeyS):
+      localPlayer.useItem 5
+    if keyPressed(KeyD):
+      localPlayer.useItem 6
     worldView.setCenter(activeVehicle.body.getPos.floor)#cp2sfml)
   
   if localPlayer != nil: 

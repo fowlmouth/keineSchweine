@@ -114,10 +114,10 @@
    "radius":4},
   "trail":{
    "anim":{
-    "file":"bullets/BeamTrail_48x48.png",
+    "file":"bullets/BeamTrail_ONE_48x48.png",
     "angle":90,
-    "delay":30},
-   "timer":50}}]
+    "delay":40},
+   "timer":70}}]
 ],
 "items":[
  ["Neutron Bomb", "Projectile", {
@@ -132,6 +132,50 @@
   "useSound":"EnergyWeaponC.wav",
   "bullet":"beam"
   }],
+ ["Gravitic Bomb", "Projectile", {
+  "cooldown":520,
+  "cost":410,
+  "useSound":"PBombC.wav",
+  "bullet":{
+   "anim":"bullets/GraziBombA_24x24.png",
+   "lifetime":1250,
+   "inheritVelocity":750,
+   "baseVelocity":420,
+   "physics":{
+    "mass":1.7,
+    "radius":4}}}],
+ ["Mold Spore Beam", "projectile", {
+  "cooldown":320,
+  "cost":490,
+  "bullet":{
+   "lifetime":1000,
+   "inheritVelocity":-500,
+   "baseVelocity":556,
+   "useSound":"EnergyWeaponA.wav",
+   "anim":{
+    "file":"bullets/plasma_proj_24x24.png",
+    "delay":40},
+   "trail":{
+    "anim":{
+     "file":"bullets/EbeamTrail_32x32.png",
+     "angle":90,
+     "delay":40},
+    "timer":100}}
+  }],
+ ["Genericorp Mine", "Projectile", {
+  "cooldown":400,
+  "cost":350,
+  "useSound":"2/mine1.wav",
+  "bullet":{
+   "inheritVelocity":0,
+   "baseVelocity":0,
+   "useSound":"mine3.wav",
+   "physics":{
+    "mass":6.0,
+    "radius":10},
+   "anim":{
+    "file":"bullets/SkithzarMine_32x32.png",
+    "delay":80}}}],
  ["Mass Driver", "Projectile", {
   "cooldown":75,
   "cost":150,

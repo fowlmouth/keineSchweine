@@ -273,10 +273,12 @@ proc validateSettings*(settings: PJsonNode, errors: var seq[string]): bool =
     else:
       var id = 0
       for i in items.items:
-        if i.kind != JArray or i.len != 3 or 
-           i[0].kind != JString or i[1].kind != JString or i[2].kind != JObject:
-          errors.add "Item #"& $id &" is invalid"
+        if i.kind != JArray: errors.add("Item #$1 is not an array"% $id)
+        elif i.len != 3: errors.add("($1) Item record should have 3 fields"%($id))
+        elif i[0].kind != JString or i[1].kind != JString or i[2].kind != JObject:
+          errors.add("($1) Item should be in form [name, type, {item: data}]"% $id)
           result = false
+        inc id
 
 proc loadSettingsFromFile*(filename: string, errors: var seq[string]): bool =
   if not existsFile(filename):
@@ -333,13 +335,16 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
     cfg.items.add itm
     nameToItemID[itm.name] = itm.id
     inc vID
-    if itm.kind == Projectile and itm.bullet.id == -1:
-      ## this item has an anonymous bullet, fix the ID and name
-      itm.bullet.id = bID 
-      itm.bullet.name = itm.name
-      cfg.bullets.add itm.bullet
-      nameToBulletID[itm.bullet.name] = itm.bullet.id
-      inc bID
+    if itm.kind == Projectile:
+      if itm.bullet.isNil:
+        errors.add("Projectile #$1 has no bullet!"% $vID)
+      elif itm.bullet.id == -1:
+        ## this item has an anonymous bullet, fix the ID and name
+        itm.bullet.id = bID 
+        itm.bullet.name = itm.name
+        cfg.bullets.add itm.bullet
+        nameToBulletID[itm.bullet.name] = itm.bullet.id
+        inc bID
   vID = 0
   for obj in settings["objects"].items:
     var o = importObject(obj, errors)
