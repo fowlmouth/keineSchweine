@@ -3,6 +3,7 @@ nakeImports
 
 const 
   GameAssets = "http://dl.dropbox.com/u/37533467/data-08-01-2012.7z"
+  BinLibs = "http://dl.dropbox.com/u/37533467/libs-2012-09-09.zip"
   ExeName = "keineschweine"
   ServerDefines = "-d:NoSFML -d:NoChipmunk"
   TestBuildDefines = "-d:debugWeps -d:showFPS -d:moreNimrod -d:debugKeys -d:foo -d:recordMode --forceBuild"
@@ -62,36 +63,72 @@ task "clean", "cleanup generated files":
   dirs.each(proc(x: var string) =
     if existsDir(x): removeDir(x))
 
-import httpclient
+import httpclient, zipfiles, times
 task "download", "download game assets":
-  var path = expandFilename("data")
+  var
+    skipAssets = false
+    path = expandFilename("data")
   path.add DirSep
   path.add(extractFilename(gameAssets))
   if existsFile(path):
     echo "The file already exists\n",
-      "[R]emove  [M]ove  [Q]uit"
+      "[R]emove  [M]ove  [Q]uit  [S]kip    Source: ", GameAssets
     case stdin.readLine.toLower
     of "r":
       removeFile path
     of "m":
       moveFile path, path/../(extractFilename(gameAssets)&"-old")
+    of "s":
+      skipAssets = true
     else:
       quit 0
-  echo "Downloading to ", path
-  downloadFile gameAssets, path
-  echo "Download finished"
-  
-  let targetDir = parentDir(parentDir(path))
-  when defined(linux):
-    let z7 = findExe("7z")
-    if z7 == "":
-      quit "Could not find 7z"
-    if shell(z7, "t", path) != 0: ##note to self: make sure this is right
-      quit "Bad download"
-    echo "Unpacking..."
-    shell(z7, "x", "-w[$1]" % targetDir, path)
   else:
-    echo "I do not know how to unpack the data on this system. Perhaps you could ",
-      "fill this part in?"
+    echo "Downloading from ", GameAssets
+  if not skipAssets:
+    echo "Downloading to ", path
+    downloadFile gameAssets, path
+    echo "Download finished"
+  
+    let targetDir = parentDir(parentDir(path))
+    when defined(linux):
+      let z7 = findExe("7z")
+      if z7 == "":
+        quit "Could not find 7z"
+      if shell(z7, "t", path) != 0: ##note to self: make sure this is right
+        quit "Bad download"
+      echo "Unpacking..."
+      shell(z7, "x", "-w[$1]" % targetDir, path)
+    else:
+      echo "I do not know how to unpack the data on this system. Perhaps you could ",
+        "fill this part in?"
+  
+  echo "Download binary libs? Only libs for linux are available currently, enjoy the irony.\n",
+    "[Y]es [N]o   Source: ", BinLibs
+  case stdin.readline.toLower
+  of "y", "yes":
+    discard ## o_O
+  else:
+    return
+  path = extractFilename(BinLibs)
+  downloadFile BinLibs, path 
+  echo "Downloaded dem libs"
+  ## this crashes, dunno why
+  when false:
+    block:
+      var z: TZipArchive
+      if not z.open(path, fmRead):
+        echo "Could not open zip, bad download?"
+        return
+      z.extractAll getCurrentDir()
+      z.close()
+      echo "Extracted the libs dir. Copy the ones you need to this dir."
 
-
+task "zip-lib", "zip up the libs dir":
+  var z: TZipArchive
+  if not z.open("libs-"& getDateStr() &".zip", fmReadWrite):
+    quit "Could not open zip"
+  for file in walkDirRec("libs", {pcFile, pcDir}):
+    echo "adding file ", file
+    z.addFile(file)
+  z.close()
+  echo "Great success!"
