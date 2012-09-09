@@ -1,7 +1,7 @@
 import
   math,
   sfml, chipmunk,
-  sg_assets, sfml_stuff
+  sg_assets, sfml_stuff, math_helpers
 type
   PAnimation* = ref TAnimation
   TAnimation* = object

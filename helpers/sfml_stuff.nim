@@ -3,10 +3,6 @@ import
   sfml, sfml_vector, chipmunk,
   input_helpers
 
-proc degrees*(rad: float): float =
-  return rad * 180.0 / PI
-proc radians*(deg: float): float =
-  return deg * PI / 180.0
 proc vec2f*(a: TVector2i): TVector2f =
   result.x = a.x.cfloat
   result.y = a.y.cfloat
@@ -22,9 +18,6 @@ proc sfml2cp*(a: TVector2f): TVector {.inline.} =
 proc cp2sfml*(a: TVector): TVector2f {.inline.} =
   result.x = a.x
   result.y = a.y
-
-proc ff*(f: float, precision = 2): string {.inline.} = 
-  return formatFloat(f, ffDecimal, precision)
 
 proc `$`*(a: var TIntRect): string =
   result = "[TIntRect $1,$2 $3x$4]".format($a.left, $a.top, $a.width, $a.height)
