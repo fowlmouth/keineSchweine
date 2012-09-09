@@ -154,18 +154,14 @@ proc free(obj: PLiveBullet) =
   obj.body.free
   obj.record = nil
 
-template newExplosion(fromObj, record, style: expr): stmt =
+template newExplosion(fromObj, record): stmt =
   explosions.add(newAnimation(record, AnimOnce, fromObj.body.getPos.cp2sfml))
 
 proc explode*(b: PLiveBullet) =
   space.removeShape b.shape
   space.removeBody b.body
   if not b.record.explosion.anim.isNil:
-    newExplosion(b, b.record.explosion.anim, AnimOnce)
-    #explosions.add(newAnimation(b.record.explosion.anim, AnimOnce))
-  else:
-    echo "wtf no explosino anim"
-    echo repr(b.record)
+    newExplosion(b, b.record.explosion.anim)
 
 proc bulletUpdate(body: PBody, gravity: TVector, damping, dt: CpFloat){.cdecl.} =
   body.updateVelocity(gravity, damping, dt)
@@ -315,6 +311,9 @@ proc unspec() =
     localPlayer.spectator = false
     ingameClient.setActive
     veh.body.setPos vector(100, 100)
+    when defined(debugWeps):
+      localPlayer.addItem("Mass Driver")
+      localPlayer.addItem("Neutron Bomb")
 proc spec() =
   setMyVehicle nil
   localPlayer.spectator = true
@@ -467,6 +466,10 @@ proc mainUpdate(dt: float) =
       activeVehicle.strafe_right(dt)
     if keyPressed(KeyLControl):
       localPlayer.fireItem 0
+    if keyPressed(KeyTab):
+      localPlayer.fireItem 1
+    if keyPressed(KeyQ):
+      localPlayer.fireItem 2
     worldView.setCenter(activeVehicle.body.getPos.floor)#cp2sfml)
   
   if localPlayer != nil: 

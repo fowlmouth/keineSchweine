@@ -61,7 +61,6 @@ proc setAngle*(obj: PAnimation; radians: float) {.inline.} =
     ## (rotation percent * rows).floor * frameheight
     obj.spriteRect.top = ((radians + obj.record.angle).wmod(TAU) / TAU * obj.record.spriteSheet.rows.float).floor.cint * obj.record.spriteSheet.frameh.cint
     obj.sprite.setTextureRect obj.spriteRect
-    echo(obj.spriteRect.top, " ", $obj.spriteRect)
   else:
     setRotation(obj.sprite, degrees(radians)) #stupid sfml, who uses degrees these days? -__-
 

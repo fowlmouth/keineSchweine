@@ -91,7 +91,9 @@
 ],
 "items":[
  ["Neutron Bomb", "Projectile", {
-  "bullet":"neutronbomb"
+  "bullet":"neutronbomb",
+  "cooldown":250,
+  "cost":350
   }],
  ["Mass Driver", "Projectile", {
   "bullet":{

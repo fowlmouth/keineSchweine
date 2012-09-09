@@ -4,7 +4,7 @@ nakeImports
 const 
   ExeName = "keineschweine"
   ServerDefines = "-d:NoSFML -d:NoChipmunk"
-  TestBuildDefines = "-d:showFPS -d:moreNimrod -d:debugKeys -d:foo -d:recordMode --forceBuild"
+  TestBuildDefines = "-d:debugWeps -d:showFPS -d:moreNimrod -d:debugKeys -d:foo -d:recordMode --forceBuild"
   ReleaseDefines = "-d:release --deadCodeElim:on"
 
 task "test", "Build with test defines":
