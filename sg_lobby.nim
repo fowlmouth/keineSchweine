@@ -245,7 +245,7 @@ proc playOffline*(b: PButton) =
   if loadSettingsFromFile(clientSettings.offlineFile, errors):
     transition()
   else:
-    dispmessage("Errors reading the file:")
+    dispmessage("Errors reading the file ("& clientSettings.offlineFile &"):")
     for e in errors: dispmessage(e)
 
 proc getClientSettings*(): TClientSettings =

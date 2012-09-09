@@ -13,6 +13,10 @@ proc mapInPlace*[A](x: var seq[A], func: proc(y: A): A {.closure.}) =
   for i in 0..x.len-1:
     x[i] = func(x[i])
 
+template unless*(condition: expr; body: stmt): stmt {.dirty.} =
+  if not(condition):
+    body
+
 when isMainModule:
   proc dumpSeq[T](x: seq[T]) =
     for index, item in x.pairs: 

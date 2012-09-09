@@ -1,8 +1,8 @@
 import 
   os, math, strutils, gl, tables,
-  sfml, sfml_vector, sfml_colors, chipmunk, 
-  input_helpers, animations, vehicles, game_objects, sfml_stuff,
-  sg_lobby, sg_gui, sg_assets
+  sfml, sfml_vector, sfml_audio, sfml_colors, chipmunk, 
+  input_helpers, animations, vehicles, game_objects, sfml_stuff, map_filter,
+  sg_lobby, sg_gui, sg_assets, sound_buffer
 {.deadCodeElim: on.}
 type
   PPlayer* = ref TPlayer
@@ -143,11 +143,12 @@ proc newItem*(record: PItemRecord): PItem =
   result.record = record
 proc newItem*(name: string): PItem {.inline.} =
   return newItem(fetchItm(name))
-proc canFire*(itm: PItem): bool = 
+proc canUse*(itm: PItem): bool = 
   if itm.cooldown > 0.0: return
   return true
 proc update*(itm: PItem; dt: float) =
-  itm.cooldown -= dt
+  if itm.cooldown > 0:
+    itm.cooldown -= dt
 
 proc free(obj: PLiveBullet) =
   obj.shape.free
@@ -162,6 +163,11 @@ proc explode*(b: PLiveBullet) =
   space.removeBody b.body
   if not b.record.explosion.anim.isNil:
     newExplosion(b, b.record.explosion.anim)
+  playSound(b.record.explosion.sound)
+  discard """if not b.record.explosion.sound.soundBuf.isNil:
+    var s = sfml_audio.newSound()
+    s.setBuffer(b.record.explosion.sound.soundBuf)
+    s.play()"""
 
 proc bulletUpdate(body: PBody, gravity: TVector, damping, dt: CpFloat){.cdecl.} =
   body.updateVelocity(gravity, damping, dt)
@@ -269,10 +275,10 @@ proc updateItems*(player: PPlayer, dt: float) =
     update(i, dt)
 proc addItem*(player: PPlayer; name: string) =
   player.items.add newItem(name)
-proc fireItem*(player: PPlayer; slot: int) =
+proc useItem*(player: PPlayer; slot: int) =
   if slot > player.items.len - 1: return
   let item = player.items[slot]
-  if item.canFire:
+  if item.canUse:
     item.cooldown += item.record.cooldown
     liveBullets.add(newBullet(item.record.bullet, player))
 
@@ -407,6 +413,7 @@ when defined(DebugKeys):
       return
     for i, o in pairs(objects):
       echo i, " ", o)
+  ingameClient.registerHandler(KeyLBracket, down, sound_buffer.report)
   var 
     mouseJoint: PConstraint
     mouseBody = space.addBody(newBody(CpInfinity, CpInfinity))
@@ -439,8 +446,7 @@ specInputClient.registerHandler(KeyP, down, proc() =
 proc resetForcesCB(body: PBody; data: pointer) {.cdecl.} =
   body.resetForces()
 
-when defined(showFPS):
-  var i = 0
+var frameCount= 0
 proc mainUpdate(dt: float) =
   if localPlayer.spectator:
     if keyPressed(KeyLeft):
@@ -465,11 +471,11 @@ proc mainUpdate(dt: float) =
     elif keyPressed(keyx):
       activeVehicle.strafe_right(dt)
     if keyPressed(KeyLControl):
-      localPlayer.fireItem 0
+      localPlayer.useItem 0
     if keyPressed(KeyTab):
-      localPlayer.fireItem 1
+      localPlayer.useItem 1
     if keyPressed(KeyQ):
-      localPlayer.fireItem 2
+      localPlayer.useItem 2
     worldView.setCenter(activeVehicle.body.getPos.floor)#cp2sfml)
   
   if localPlayer != nil: 
@@ -505,11 +511,13 @@ proc mainUpdate(dt: float) =
     var coords = window.convertCoords(vec2i(getMousePos()), worldView)
     mouseSprite.setPosition(coords)
   
+  inc frameCount
   when defined(showFPS):
-    inc(i)
-    if i mod 60 == 0:
+    if frameCount mod 60 == 0:
       fpsText.setString($(1.0/dt).round)
-      i = 0
+  if frameCount mod 250 == 0:
+    updateSoundBuffer()
+    frameCount = 0
 
 proc mainRender() =
   window.clear(Black)
@@ -544,7 +552,7 @@ proc mainRender() =
   when defined(recordMode):
     if isRecording:
       if snapshots.len < 100:
-        if i mod 5 == 0:
+        if frameCount mod 5 == 0:
           snapshots.add(window.capture())
       else: stopRecording()
 

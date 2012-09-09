@@ -1,6 +1,7 @@
 {
 "vehicles":[
  ["Masta",{
+  "playable":true,
   "anim":{
    "file":"ships/skith/Mastakith_54x54.png",
    "angle":90},
@@ -83,17 +84,25 @@
   "anim":{
    "file":"bullets/EnergyBombD2_24x24.png",
    "delay":60},
+  "lifetime":1000,
+  "inheritVelocity":1250,
+  "baseVelocity":87,
   "physics":{
    "mass":4,
-   "radius":8
-  }
+   "radius":8},
+  "explode":{
+   "anim":{
+    "file":"explosions/laserHit2_64x64.png",
+    "delay":15},
+   "sound":"ebomb3.wav"}
   }]
 ],
 "items":[
  ["Neutron Bomb", "Projectile", {
   "bullet":"neutronbomb",
-  "cooldown":250,
-  "cost":350
+  "cooldown":650,
+  "cost":350,
+  "useSound":"bomb5.wav"
   }],
  ["Mass Driver", "Projectile", {
   "bullet":{
@@ -111,7 +120,7 @@
     "health":3.1,
     "asteroid":2},
    "explode":{
-    "sound":"explode0.wav",
+    "sound":"explode02.wav",
     "anim":{
      "file":"bullets/EBulletHit_32x32.png",
      "delay":5}},
@@ -123,7 +132,7 @@
     "color":"green"}},
   "cooldown":22,
   "cost":150,
-  "fire_sound":"gun5.wav"}],
+  "useSound":"gun5.wav"}],
  ["Iron", "Ammo", {
   "anim":"resources/IronOre_32x32.png",
   "physics":{

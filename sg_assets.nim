@@ -9,7 +9,7 @@ when defined(NoSFML):
     result.x = x
     result.y = y
 else:
-  import sfml, sfml_vector, sfml_stuff
+  import sfml, sfml_vector, sfml_audio, sfml_stuff
 when not defined(NoChipmunk):
   import chipmunk
 
@@ -48,6 +48,7 @@ type
     anim*: PAnimationRecord
     physics*: TPhysicsRecord ##apply when the item is dropped in the arena
     cooldown*: float
+    useSound*: PSoundRecord
     case kind*: TItemKind
     of Projectile: 
       bullet*: PBulletRecord
@@ -72,13 +73,19 @@ type
     health*: int
   TExplosionRecord* = object
     anim*: PAnimationRecord
-    sound*: TSoundRecord 
-  TSoundRecord* = object ##to be implemented
+    sound*: PSoundRecord 
   PAnimationRecord* = ref TAnimationRecord
   TAnimationRecord* = object
     spriteSheet*: PSpriteSheet
     angle*: float
     delay*: float  ##animation delay
+  PSoundRecord* = ref TSoundRecord
+  TSoundRecord* = object
+    when defined(NoSFML):
+      file*: string
+      contents*: TChecksumFile
+    else:
+      soundBuf*: PSoundBuffer 
   PSpriteSheet* = ref TSpriteSheet
   TSpriteSheet* = object 
     file*: string
@@ -122,6 +129,7 @@ proc importHandling(data: PJsonNode): THandlingRecord
 proc importBullet(data: PJsonNode): PBulletRecord
 proc importSoul(data: PJsonNode): TSoulRecord
 proc importExplosion(data: PJsonNode): TExplosionRecord
+proc importSound(data: PJsonNode; fieldName: string = nil): PSoundRecord
 
 ## this is the only pipe between lobby and main.nim
 proc getActiveState*(): TGameState =
@@ -237,7 +245,15 @@ proc loadSettingsFromFile*(filename: string, errors: var seq[string]): bool =
     result = loadSettings(readFile(filename), errors)
 
 proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
-  var settings = parseJson(rawJson)
+  var settings: PJsonNode
+  try:
+    settings = parseJson(rawJson)
+  except EJsonParsingError:
+    errors.add("JSON parsing error: "& getCurrentExceptionMsg())
+    return
+  except: 
+    errors.add("Unknown exception: "& getCurrentExceptionMsg())
+    return
   if not validateSettings(settings, errors):
     return
   if cfg != nil: #TODO try this
@@ -319,6 +335,17 @@ proc getField(node: PJsonNode, field: string, target: var int) =
     target = node[field].num.int
   elif node[field].kind == JFloat:
     target = node[field].fnum.int
+proc getField(node: PJsonNode; field: string; target: var bool) =
+  if not node.existsKey(field):
+    return
+  case node[field].kind
+  of JBool:
+    target = node[field].bval
+  of JInt:
+    target = (node[field].num != 0)
+  of JFloat:
+    target = (node[field].fnum != 0.0)
+  else: nil
 
 template checkKey(node: expr; key: string): stmt =
   if not existsKey(node, key):
@@ -393,6 +420,20 @@ proc importExplosion(data: PJsonNode): TExplosionRecord =
   checkKey(data, "explode")
   let expl = data["explode"]
   result.anim = importAnim(expl)
+  result.sound = importSound(expl, "sound")
+
+when defined(NoSFML):
+  proc importSound*(data: PJsonNode; fieldName: string = nil): PSoundRecord =
+    nil
+else:
+  proc importSound*(data: PJsonNode; fieldName: string = nil): PSoundRecord =
+    if data.kind == JObject:
+      checkKey(data, fieldName)
+      new(result)
+      result.soundBuf = newSoundBuffer("data/sfx/"/data[fieldName].str)
+    elif data.kind == JString:
+      new(result)
+      result.soundBuf = newSoundBuffer("data/sfx/"/data.str)
 
 proc importVeh(data: PJsonNode): PVehicleRecord =
   new(result)
@@ -407,8 +448,9 @@ proc importVeh(data: PJsonNode): PVehicleRecord =
   result.anim = importAnim(vehdata)
   result.physics = importPhys(vehdata)
   result.handling = importHandling(vehdata)
-  if not result.anim.spriteSheet.isNil:
-    result.playable = true
+  vehdata.getField("playable", result.playable)
+  if result.anim.spriteSheet.isNil and result.playable:
+    result.playable = false
 proc importObject(data: PJsonNode): PObjectRecord =
   new(result)
   if data.kind != JArray or data.len != 2:
@@ -429,6 +471,8 @@ proc importItem(data: PJsonNode): PItemRecord =
   result.cooldown = 100.0 
   data[2].getField("cooldown", result.cooldown)
   result.cooldown /= 1000.0  ##cooldown is stored in ms 
+  
+  result.useSound = importSound(data, "useSound")
   
   case data[1].str.toLower
   of "projectile":
