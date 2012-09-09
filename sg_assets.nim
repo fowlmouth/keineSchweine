@@ -62,6 +62,7 @@ type
     physics*: TPhysicsRecord
     lifetime*, inheritVelocity*, baseVelocity*: float
     explosion*: TExplosionRecord
+    trail*: PAnimationRecord
   TPhysicsRecord* = object
     mass*: float
     radius*: float
@@ -81,8 +82,8 @@ type
     delay*: float  ##animation delay
   PSoundRecord* = ref TSoundRecord
   TSoundRecord* = object
+    file*: string
     when defined(NoSFML):
-      file*: string
       contents*: TChecksumFile
     else:
       soundBuf*: PSoundBuffer 
@@ -151,12 +152,18 @@ proc free*(obj: PZoneSettings) =
 proc free*(obj: PSpriteSheet) =
   echo("Free'd "&obj.file)
 
-proc loadAllGraphics*() =
+proc loadAllAssets*() =
   var l = 0
   for name, ss in SpriteSheets.pairs():
     if load(ss):
       inc(l)
-  echo("Loaded ",l," sprites")
+  echo "Loaded ",l," sprites"
+  l = 0
+  for name, s in SoundCache.pairs():
+    if load(s):
+      inc(l)
+  echo "Loaded ", l, " sounds"
+  if l == 0:  echo(len(soundCache))
 proc getLevelSettings*(): PLevelSettings =
   result = cfg.levelSettings
 
@@ -183,14 +190,9 @@ proc newSprite(filename: string): PSpriteSheet =
 proc newSound(filename: string): PSoundRecord =
   if hasKey(SoundCache, filename): 
     return SoundCache[filename]
-  when defined(noSFML):
-    new(result)
-    result.file = filename
-    SoundCache[filename] = result
-  else:
-    new(result)
-    result.soundBuf = newSoundBuffer("data/sfx"/filename)
-    SoundCache[filename] = result
+  new(result)
+  result.file = filename
+  SoundCache[filename] = result
 
 when defined(NoSFML):
   proc load*(ss: PSpriteSheet): bool =
@@ -198,6 +200,7 @@ when defined(NoSFML):
     ss.contents = checksumFile(ss.file)
     result = true
   proc load*(s: PSoundRecord): bool =
+    if not s.contents.unpackedSize == 0: return
     s.contents = checksumFile(s.file)
     result = true
 else:
@@ -219,7 +222,9 @@ else:
     ss.sprite.setOrigin(vec2f(ss.framew / 2, ss.frameh / 2))
     result = true
   proc load*(s: PSoundRecord): bool =
-    nil
+    s.soundBuf = newSoundBuffer("data/sfx"/s.file)
+    if not s.isNil:
+      result = true
 
 template addError(e: expr): stmt {.immediate.} =
   errors.add(e)
@@ -443,17 +448,12 @@ proc importExplosion(data: PJsonNode): TExplosionRecord =
   let expl = data["explode"]
   result.anim = importAnim(expl)
   result.sound = importSound(expl, "sound")
-
-when defined(NoSFML):
-  proc importSound*(data: PJsonNode; fieldName: string = nil): PSoundRecord =
-    new(result)
-else:
-  proc importSound*(data: PJsonNode; fieldName: string = nil): PSoundRecord =
-    if data.kind == JObject:
-      checkKey(data, fieldName)
-      result = newSound(data[fieldName].str)
-    elif data.kind == JString:
-      result = newSound(data.str)
+proc importSound*(data: PJsonNode; fieldName: string = nil): PSoundRecord =
+  if data.kind == JObject:
+    checkKey(data, fieldName)
+    result = newSound(data[fieldName].str)
+  elif data.kind == JString:
+    result = newSound(data.str)
 
 proc importVeh(data: PJsonNode): PVehicleRecord =
   new(result)

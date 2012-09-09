@@ -87,7 +87,7 @@ task "download", "download game assets":
     if shell(z7, "t", path) != 0: ##note to self: make sure this is right
       quit "Bad download"
     echo "Unpacking..."
-    shell(z7, "x", "-w["&targetDir&"]", path)
+    shell(z7, "x", "-w[$1]" % targetDir, path)
   else:
     echo "I do not know how to unpack the data on this system. Perhaps you could ",
       "fill this part in?"

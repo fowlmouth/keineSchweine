@@ -105,6 +105,9 @@
   "useSound":"bomb5.wav"
   }],
  ["Mass Driver", "Projectile", {
+  "cooldown":75,
+  "cost":150,
+  "useSound":"gun5.wav",
   "bullet":{
    "anim":{
      "file":"bullets/MassDriver_14x14.png",
@@ -129,10 +132,7 @@
      "file":"bullets/bullettrail2_gray_12x12.png",
      "delay":90},
     "timer":90,
-    "color":"green"}},
-  "cooldown":22,
-  "cost":150,
-  "useSound":"gun5.wav"}],
+    "color":"green"}}}],
  ["Iron", "Ammo", {
   "anim":"resources/IronOre_32x32.png",
   "physics":{

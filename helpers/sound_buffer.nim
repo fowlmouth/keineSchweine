@@ -1,18 +1,25 @@
-import sfml_audio, sg_assets
-when defined(NoSFML):
+when defined(NoSFML) or defined(NoChipmunk):
   {.error.}
+import sfml_audio, sfml_stuff, sg_assets, chipmunk
+const
+  MinDistance* = 350.0
+  Attenuation* = 20.0
 var
   liveSounds: seq[PSound] = @[]
   deadSounds: seq[PSound] = @[]
 
-proc playSound*(sound: PSoundRecord) =
+proc playSound*(sound: PSoundRecord, pos: TVector) =
   if sound.soundBuf.isNil: return
   var s: PSound
   if deadSounds.len == 0:
     s = sfml_audio.newSound()
     s.setLoop false
+    s.setRelativeToListener true
+    s.setAttenuation Attenuation
+    s.setMinDistance MinDistance
   else:
     s = deadSounds.pop()
+  s.setPosition(vec3f(pos.x, pos.y))
   s.setBuffer(sound.soundBuf)
   s.play()
   liveSounds.add s

@@ -25,8 +25,13 @@ type
     body: chipmunk.PBody
     shape: chipmunk.PShape
 const
-  LGrabbable* = 1.TLayers
-  TenDegrees = 10.0 * PI / 180.0
+  LGrabbable*  = (1 shl 0).TLayers
+  LBorders*    = (1 shl 1).TLayers
+  LPlayer*     = ((1 shl 2) and LBorders.int).TLayers
+  LEnemy*      = ((1 shl 4) and LBorders.int).TLayers
+  LEnemyFire*  = (LPlayer).TLayers
+  LPlayerFire* = (LEnemy).TLayers
+  
   ##temporary constants
   W_LIMIT = 2.3
   V_LIMIT = 35
@@ -56,6 +61,7 @@ var
   shipSelect = newGuiContainer()
   delObjects: seq[int] = @[]
   showShipSelect = false
+  myPosition: array[0..1, TVector3f] ##for audio positioning
 let 
   nameTagOffset = vec2f(0.0, 1.0)
 when defined(foo):
@@ -106,7 +112,7 @@ proc angularDampingSim(body: PBody, gravity: TVector, damping, dt: CpFloat){.cde
   body.updateVelocity(gravity, damping, dt)
 
 proc initLevel() =
-  loadAllGraphics()
+  loadAllAssets()
   let levelSettings = getLevelSettings()
   levelArea.width = levelSettings.size.x
   levelArea.height= levelSettings.size.y
@@ -119,8 +125,9 @@ proc initLevel() =
         space.staticBody, 
         borderSeq[i], 
         borderSeq[(i + 1) mod 4],
-        2.3))
+        8.0))
     seg.setElasticity 0.96
+    seg.setLayers(LBorders)
   if levelSettings.starfield.len > 0:
     showStars = true
     for sprite in levelSettings.starfield:
@@ -163,7 +170,7 @@ proc explode*(b: PLiveBullet) =
   space.removeBody b.body
   if not b.record.explosion.anim.isNil:
     newExplosion(b, b.record.explosion.anim)
-  playSound(b.record.explosion.sound)
+  playSound(b.record.explosion.sound, b.body.getPos())
   discard """if not b.record.explosion.sound.soundBuf.isNil:
     var s = sfml_audio.newSound()
     s.setBuffer(b.record.explosion.sound.soundBuf)
@@ -190,6 +197,10 @@ proc newBullet*(record: PBulletRecord; fromPlayer: PPlayer): PLiveBullet =
     chipmunk.newCircleShape(result.body, 
                             record.physics.radius.cdouble, 
                             vectorZero))
+  if fromPlayer == localPlayer:
+    result.shape.setLayers(LPlayerFire)
+  else:
+    result.shape.setLayers(LEnemyFire)
   let 
     fireAngle = fromPlayer.vehicle.body.getAngle()
     fireAngleV = vectorForAngle(fireAngle)
@@ -317,6 +328,7 @@ proc unspec() =
     localPlayer.spectator = false
     ingameClient.setActive
     veh.body.setPos vector(100, 100)
+    veh.shape.setLayers(LPlayer)
     when defined(debugWeps):
       localPlayer.addItem("Mass Driver")
       localPlayer.addItem("Neutron Bomb")
@@ -510,6 +522,17 @@ proc mainUpdate(dt: float) =
   when defined(foo):
     var coords = window.convertCoords(vec2i(getMousePos()), worldView)
     mouseSprite.setPosition(coords)
+  
+  if localPlayer != nil and localPlayer.vehicle != nil:
+    let 
+      pos = localPlayer.vehicle.body.getPos()
+      ang = localPlayer.vehicle.body.getAngle.vectorForAngle()
+    myPosition[0].x = pos.x
+    myPosition[0].y = pos.y
+    myPosition[1].x = ang.x
+    myPosition[1].y = ang.y
+    listenerSetPosition(myPosition[0])
+    listenerSetDirection(myPosition[1])
   
   inc frameCount
   when defined(showFPS):
