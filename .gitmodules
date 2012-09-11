@@ -7,3 +7,6 @@
 [submodule "dependencies/nake"]
 	path = dependencies/nake
 	url = git://gist.github.com/3607822.git
+[submodule "dependencies/enet"]
+	path = dependencies/enet
+	url = git@gist.github.com:3694178.git
