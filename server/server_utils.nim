@@ -1,6 +1,6 @@
 import 
   streams, md5, sockets, unsigned,
-  sg_packets, zlib_helpers
+  sg_packets, zlib_helpers, idgen
 type
   TClientType* = enum
     CServer = 0'i8, CPlayer, CUnknown
@@ -15,6 +15,8 @@ type
     of CPlayer:
       alias*: string
       session*: string
+      lastPing*: float
+      failedPings*: int
     of CServer:
       record*: ScZoneRecord
       cfg*: TChecksumFile
@@ -41,23 +43,6 @@ proc newIncomingBuffer*(size = 1024): PStringStream =
   result.flushImpl = proc(stream: PStream) =
     stream.setPosition(0)
     PStringStream(stream).data.setLen(0)
-
-#proc free[T](idg: PIDgen[T]) = 
-#  result.freeIDs = nil
-proc newIDGen*[T: Ordinal](): PIDGen[T] =
-  new(result)#, free)
-  result.max = 0.T
-  result.freeIDs = @[]
-proc next*[T](idg: PIDGen[T]): T =
-  if idg.freeIDs.len > 0:
-    result = idg.freeIDs.pop
-  elif idg.max < high(T)-T(1):
-    result = idg.max
-    idg.max += 1
-  else:
-    nil #system meltdown
-proc del*[T](idg: PIDGen[T]; id: T) =
-  idg.freeIDs.add id
 
 
 proc free*(c: PClient) =

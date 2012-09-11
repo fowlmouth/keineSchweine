@@ -41,11 +41,13 @@ let
   vectorZeroF* = vec2f(0.0, 0.0)
 
 proc newGuiContainer*(): PGuiContainer
+proc newGuiContainer*(pos: TVector2f): PGuiContainer {.inline.}
 proc free*(container: PGuiContainer)
 proc add*(container: PGuiContainer; widget: PGuiObject)
 proc clearButtons*(container: PGuiContainer)
 proc click*(container: PGuiContainer; position: TVector2f)
 proc setActive*(container: PGuiContainer; entry: PTextEntry)
+proc setPosition*(container: PGuiContainer; position: TVector2f)
 
 proc update*(container: PGuiContainer; dt: float)
 proc draw*(window: PRenderWindow; container: PGuiContainer) {.inline.}
@@ -82,6 +84,9 @@ proc newGuiContainer*(): PGuiContainer =
   new(result, free)
   result.widgets = @[]
   result.buttons = @[]
+proc newGuiContainer*(pos: TVector2f): PGuiContainer =
+  result = newGuiContainer()
+  result.setPosition pos
 proc free*(container: PGuiContainer) = 
   container.widgets = nil
   container.buttons = nil

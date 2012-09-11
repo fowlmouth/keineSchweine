@@ -65,6 +65,20 @@ var
   myPosition: array[0..1, TVector3f] ##for audio positioning
 let 
   nameTagOffset = vec2f(0.0, 1.0)
+when defined(escapeMenuTest):
+  import browsers
+  var
+    escMenu = newGuiContainer(vec2f(100, 100))
+    escMenuOpen = false
+    pos = vec2f(0, 0)
+  escMenu.newButton("Some Website", pos, proc(b: PButton) =
+    
+  escMenu.newButton("Back to Lobby", pos, proc(b: PButton) =
+    echo "herro")
+  proc toggleEscape() =
+    escMenuOpen = not escMenuOpen
+  ingameClient.registerHandler(KeyEscape, down, toggleEscapeMenu)
+  specInputClient.registerHandler(KeyEscape, down, toggleEscapeMenu)
 when defined(foo):
   var mouseSprite: sfml.PCircleShape
 when defined(recordMode):
@@ -164,13 +178,9 @@ proc free(obj: PLiveBullet) =
   obj.record = nil
 
 
-template newExplosion{
-  newExplosion(obj, animation) 
-}(obj, animation): stmt =
+template newExplosion(obj, animation): stmt =
   explosions.add(newAnimation(animation, AnimOnce, obj.body.getPos.cp2sfml, obj.body.getAngle))
-template newExplosion{
-  newExplosion(obj, animation, angle)
-}(obj, animation, angle): stmt =
+template newExplosion(obj, animation, angle): stmt =
   explosions.add(newAnimation(animation, AnimOnce, obj.body.getPos.cp2sfml, angle))
 
 proc explode*(b: PLiveBullet) =
@@ -183,7 +193,7 @@ proc explode*(b: PLiveBullet) =
 proc bulletUpdate(body: PBody, gravity: TVector, damping, dt: CpFloat){.cdecl.} =
   body.updateVelocity(gravity, damping, dt)
 
-template getPhysical() =
+template getPhysical() {.immediate.} =
   result.body = space.addBody(newBody(
     record.physics.mass,
     record.physics.moment))
@@ -244,43 +254,27 @@ proc free*(veh: PVehicle) =
   veh.shape  = nil
 
 
-proc newVehicle*(veh: string): PVehicle =
-  var v = fetchVeh(veh)
-  if not v.playable:
-    echo(veh &"is not playable")
+proc newVehicle*(record: PVehicleRecord): PVehicle =
+  if not record.playable:
+    echo(record.name &" is not playable")
     return nil
-  echo("Creating "& veh)
+  echo("Creating "& record.name)
   new(result, free)
-  result.record = v
+  result.record = record
   result.sprite = result.record.anim.spriteSheet.sprite.copy()
-  result.sprite.setOrigin(vec2f(v.anim.spriteSheet.framew / 2, v.anim.spriteSheet.frameh / 2))
   result.spriteRect = result.sprite.getTextureRect()
-  result.body = space.addBody(
-    newBody(
-      result.record.physics.mass,
-      momentForCircle(
-        result.record.physics.mass.cdouble, 
-        0.0, 
-        result.record.physics.radius.cdouble, 
-        vector(0.0,0.0)
-      ) * 0.62
-  ) )
+  getPhysical()
   result.body.setAngVelLimit W_LIMIT
   result.body.setVelLimit result.record.handling.topSpeed
   result.body.velocityFunc = angularDampingSim
-  result.shape = space.addShape(
-    chipmunk.newCircleShape(result.body, 
-                            result.record.physics.radius.cdouble, 
-                            vectorZero))
-  echo(veh &" created")
+proc newVehicle*(name: string): PVehicle =
+  result = newVehicle(fetchVeh(name))
 
 proc update*(obj: PVehicle) =
   obj.sprite.setPosition(obj.body.getPos.floor)
-  let 
-    x = ((-obj.body.getAngVel + W_LIMIT) / (W_LIMIT*2.0) * (obj.record.anim.spriteSheet.cols - 1).float).floor.int * obj.record.anim.spriteSheet.framew
-    y = ((obj.offsetAngle.wmod(TAU) / TAU) * obj.record.anim.spriteSheet.rows.float).floor.int * obj.record.anim.spriteSheet.frameh
-  if obj.spriteRect.move(x.cint, y.cint):
-    obj.sprite.setTextureRect(obj.spriteRect)
+  obj.spriteRect.left = ((-obj.body.getAngVel + W_LIMIT) / (W_LIMIT*2.0) * (obj.record.anim.spriteSheet.cols - 1).float).floor.int * obj.record.anim.spriteSheet.framew
+  obj.spriteRect.top = ((obj.offsetAngle.wmod(TAU) / TAU) * obj.record.anim.spriteSheet.rows.float).floor.int * obj.record.anim.spriteSheet.frameh
+  obj.sprite.setTextureRect(obj.spriteRect)
 
 
 proc newPlayer*(alias: string = "poo"): PPlayer =
@@ -387,6 +381,8 @@ proc toggleShipSelect() =
   showShipSelect = not showShipSelect
 proc handleLClick() =
   let pos = input_helpers.getMousePos()
+  when defined(escapeMenuTest):
+    
   if showShipSelect:
     shipSelect.click(pos)
   if localPlayer.spectator:
@@ -629,7 +625,7 @@ when isMainModule:
   
   LobbyReady()
   playBtn = specGui.newButton(
-    "Unspec - F11", position = vec2f(680.0, 8.0), onClick = proc(b: PButton) =
+    "Unspec - F12", position = vec2f(680.0, 8.0), onClick = proc(b: PButton) =
       toggleSpec())
   
   block:

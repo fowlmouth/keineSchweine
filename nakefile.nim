@@ -6,14 +6,19 @@ const
   BinLibs = "http://dl.dropbox.com/u/37533467/libs-2012-09-09.zip"
   ExeName = "keineschweine"
   ServerDefines = "-d:NoSFML -d:NoChipmunk"
-  TestBuildDefines = "-d:debugWeps -d:showFPS -d:moreNimrod -d:debugKeys -d:foo -d:recordMode --forceBuild"
+  TestBuildDefines = "-d:escapeMenuTest -d:debugWeps -d:showFPS -d:moreNimrod -d:debugKeys -d:foo -d:recordMode --forceBuild"
   ReleaseDefines = "-d:release --deadCodeElim:on"
+  ReleaseTestDefines = "-d:debugWeps -d:debugKeys --forceBuild"
 
 task "test", "Build with test defines":
   if shell("nimrod", TestBuildDefines, "compile", ExeName) != 0:
     echo "The build failed."
     quit 1
   shell "."/ExeName, "offline"
+
+task "test2", "Build release test build test release build":
+  if shell("nimrod", ReleaseDefines, ReleaseTestDefines, "compile", ExeName) == 0:
+    shell "."/ExeName
 
 task "dirserver", "build the directory server":
   withDir "server":

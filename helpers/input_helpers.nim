@@ -40,6 +40,7 @@ proc clearButton*(btn: TMouseButton) {.inline.} =
   keyState[-btn.int32] = false
 
 proc addKeyEvent*(key: TKeyCode, ev: TKeyEventKind) {.inline.} =
+  if activeClient.isNil: return
   let k = key.int32
   case ev
   of down: 
@@ -51,6 +52,7 @@ proc addKeyEvent*(key: TKeyCode, ev: TKeyEventKind) {.inline.} =
     if activeClient.onKeyUp.hasKey(k):
       activeClient.onKeyUp[k]()
 proc addButtonEvent*(btn: TMouseButton, ev: TKeyEventKind) {.inline.} =
+  if activeClient.isNil: return 
   let b = -btn.int32
   case ev
   of down: 

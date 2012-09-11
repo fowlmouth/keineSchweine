@@ -7,3 +7,13 @@ genpacket/genpacket
 nakefile
 test
 
+enet_server/enet_client
+enet_server/enet_server
+enet_server/nimcache
+enet_server/data
+server/data
+data/gfx
+data/sfx
+data/snapshots
+libs-*.zip
+data/data-*.7z

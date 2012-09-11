@@ -109,8 +109,8 @@ const
   MomentMult* = 0.62 ## global moment of inertia multiplier
 var 
   cfg: PZoneSettings
-  SpriteSheets* = initTable[string, PSpriteSheet](64)
-  SoundCache* = initTable[string, PSoundRecord](64)
+  SpriteSheets = initTable[string, PSpriteSheet](64)
+  SoundCache = initTable[string, PSoundRecord](64)
   nameToVehID*: TTable[string, int]
   nameToItemID*: TTable[string, int]
   nameToObjID*: TTable[string, int]
@@ -162,17 +162,23 @@ proc free*(obj: PSoundRecord) =
   echo "Free'd ", obj.file
 
 proc loadAllAssets*() =
-  var l = 0
+  var 
+    loaded = 0
+    failed = 0
   for name, ss in SpriteSheets.pairs():
     if load(ss):
-      inc(l)
-  echo "Loaded ",l," sprites"
-  l = 0
+      inc loaded
+    else:
+      inc failed
+  echo loaded," sprites loaded. ", failed, " sprites failed."
+  loaded = 0
+  failed = 0
   for name, s in SoundCache.pairs():
     if load(s):
-      inc(l)
-  echo "Loaded ", l, " sounds"
-  if l == 0:  echo(len(soundCache))
+      inc loaded
+    else:
+      inc failed
+  echo loaded, " sounds loaded. ", failed, " sounds failed."
 proc getLevelSettings*(): PLevelSettings =
   result = cfg.levelSettings
 
@@ -180,6 +186,15 @@ iterator playableVehicles*(): PVehicleRecord =
   for v in cfg.vehicles.items():
     if v.playable:
       yield v
+
+template allAssets*(body: stmt) {.dirty.}=
+  block: 
+    var assetType = FGraphics
+    for file, asset in pairs(SpriteSheets):
+      body
+    assetType = FSound
+    for file, asset in pairs(SoundCache):
+      body
 
 template cacheImpl(procName, cacheName, resultType: expr; body: stmt) {.dirty.} =
   proc procName*(filename: string; errors: var seq[string]): resulttype =

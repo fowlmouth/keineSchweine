@@ -1,7 +1,18 @@
 import 
   math, strutils,
-  sfml, sfml_vector, chipmunk,
+  sfml, sfml_vector,
   input_helpers
+when not defined(NoChipmunk):
+  import chipmunk
+  proc floor*(a: TVector): TVector2f {.inline.} =
+    result.x = a.x.floor
+    result.y = a.y.floor
+  proc sfml2cp*(a: TVector2f): TVector {.inline.} =
+    result.x = a.x
+    result.y = a.y
+  proc cp2sfml*(a: TVector): TVector2f {.inline.} =
+    result.x = a.x
+    result.y = a.y
 
 proc vec2f*(a: TVector2i): TVector2f =
   result.x = a.x.cfloat
@@ -12,15 +23,6 @@ proc vec2i*(a: TVector2f): TVector2i =
 proc vec3f*(x, y: float): TVector3f =
   result.x = x.cfloat
   result.y = y.cfloat
-proc floor*(a: TVector): TVector2f {.inline.} =
-  result.x = a.x.floor
-  result.y = a.y.floor
-proc sfml2cp*(a: TVector2f): TVector {.inline.} =
-  result.x = a.x
-  result.y = a.y
-proc cp2sfml*(a: TVector): TVector2f {.inline.} =
-  result.x = a.x
-  result.y = a.y
 
 proc `$`*(a: var TIntRect): string =
   result = "[TIntRect $1,$2 $3x$4]".format($a.left, $a.top, $a.width, $a.height)

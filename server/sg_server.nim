@@ -261,6 +261,7 @@ when isMainModule:
       echo("You have errors in your zone settings:")
       for e in errors: echo("**", e)
       quit(1)
+    errors.setLen 0
     
     var pair: FileChallengePair
     pair.challenge.file = zoneFile
@@ -268,21 +269,21 @@ when isMainModule:
     pair.challenge.fullLen = zoneSettings.len.int32
     pair.file = checksumStr(zoneSettings)
     myAssets.add pair
+    
+    allAssets:
+      if not load(asset):
+        echo "Invalid or missing file ", file
+      else:
+        var pair: FileChallengePair
+        pair.challenge.file = file
+        pair.challenge.assetType = assetType
+        pair.challenge.fullLen = getFileSize(
+          expandPath(assetType, file)).int32
+        pair.file = asset.contents
+        myAssets.add pair
   
-  for file, s in SpriteSheets.pairs():
-    if not s.load():
-      echo "Invalid or missing file"
-      echo repr(s)
-      quit 1
-    else:
-      var pair: FileChallengePair
-      pair.challenge.file = file 
-      pair.challenge.assetType = FGraphics
-      pair.challenge.fullLen = getFileSize(expandPath(FGraphics, file)).int32
-      pair.file = s.contents
-      myAssets.add pair
   
-  echo "Zone has ", myAssets.len, " associated assets"
+      echo "Zone has ", myAssets.len, " associated assets"
   
   thisZone.name = jsonSettings["name"].str
   thisZone.desc = jsonSettings["desc"].str

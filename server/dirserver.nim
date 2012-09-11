@@ -151,6 +151,7 @@ proc poll*(timeout: int = 250) =
       return
     clientIndex = (clientIndex + 1) mod nclients
     var c = allClients[clientIndex]
+    if c.
     if c.outputBuf.getPosition > 0:
       let res = server.sendTo(c.addy.host, c.addy.port.TPort, c.outputBuf.data)
       echo("Write ", c, " result: ", res, " data: ", repr(c.outputBuf.data))
