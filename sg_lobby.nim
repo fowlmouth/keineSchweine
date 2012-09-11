@@ -8,6 +8,7 @@ type
     resolution*: TVideoMode
     offlineFile: string
     dirserver: tuple[host: string, port: TPort]
+    website*: string
 var
   clientSettings: TClientSettings
   gui = newGuiContainer()
@@ -261,6 +262,7 @@ proc lobbyInit*() =
   clientSettings.resolution.width = s["resolution"][0].num.cint
   clientSettings.resolution.height= s["resolution"][1].num.cint
   clientSettings.resolution.bitsPerPixel = s["resolution"][2].num.cint
+  clientSettings.website = s["website"].str
   zonelist.setPosition(vec2f(200.0, 100.0))
   connectionButtons = @[]
   

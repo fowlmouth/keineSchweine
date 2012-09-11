@@ -14,7 +14,7 @@ forwardPacket(Uint16, int16)
 forwardPacket(TPort, int16)
 
 idPacket(Login, 'a',
-  tuple[id: uint16; alias: string; sessionKey: string],
+  tuple[id: int32; alias: string; sessionKey: string],
   tuple[alias: string, passwd: string])
 
 let HZoneJoinReq* = 'j'
@@ -42,7 +42,7 @@ idPacket(Hello, 'h',
   tuple[i: int8 = 14])
 
 let HPlayerList* = 'P'
-defPacket(ScPlayerRec, tuple[id: uint16; alias: string = ""])
+defPacket(ScPlayerRec, tuple[id: int32; alias: string = ""])
 defPacket(ScPlayerList, tuple[players: seq[ScPlayerRec]])
 
 let HTeamList* = 'T'

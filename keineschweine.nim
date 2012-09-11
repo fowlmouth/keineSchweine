@@ -72,13 +72,13 @@ when defined(escapeMenuTest):
     escMenuOpen = false
     pos = vec2f(0, 0)
   escMenu.newButton("Some Website", pos, proc(b: PButton) =
-    
+    openDefaultBrowser(getClientSettings().website))
   escMenu.newButton("Back to Lobby", pos, proc(b: PButton) =
     echo "herro")
   proc toggleEscape() =
     escMenuOpen = not escMenuOpen
-  ingameClient.registerHandler(KeyEscape, down, toggleEscapeMenu)
-  specInputClient.registerHandler(KeyEscape, down, toggleEscapeMenu)
+  ingameClient.registerHandler(KeyEscape, down, toggleEscape)
+  specInputClient.registerHandler(KeyEscape, down, toggleEscape)
 when defined(foo):
   var mouseSprite: sfml.PCircleShape
 when defined(recordMode):
@@ -272,8 +272,8 @@ proc newVehicle*(name: string): PVehicle =
 
 proc update*(obj: PVehicle) =
   obj.sprite.setPosition(obj.body.getPos.floor)
-  obj.spriteRect.left = ((-obj.body.getAngVel + W_LIMIT) / (W_LIMIT*2.0) * (obj.record.anim.spriteSheet.cols - 1).float).floor.int * obj.record.anim.spriteSheet.framew
-  obj.spriteRect.top = ((obj.offsetAngle.wmod(TAU) / TAU) * obj.record.anim.spriteSheet.rows.float).floor.int * obj.record.anim.spriteSheet.frameh
+  obj.spriteRect.left = (((-obj.body.getAngVel + W_LIMIT) / (W_LIMIT*2.0) * (obj.record.anim.spriteSheet.cols - 1).float).floor.int * obj.record.anim.spriteSheet.framew).cint
+  obj.spriteRect.top = ((obj.offsetAngle.wmod(TAU) / TAU) * obj.record.anim.spriteSheet.rows.float).floor.cint * obj.record.anim.spriteSheet.frameh.cint
   obj.sprite.setTextureRect(obj.spriteRect)
 
 
@@ -382,7 +382,9 @@ proc toggleShipSelect() =
 proc handleLClick() =
   let pos = input_helpers.getMousePos()
   when defined(escapeMenuTest):
-    
+    if escMenuOpen:
+      escMenu.click(pos)
+      return
   if showShipSelect:
     shipSelect.click(pos)
   if localPlayer.spectator:

@@ -1,6 +1,6 @@
 type
   PIDGen*[T: Ordinal] = ref TIDGen[T]
-  TIDGen[T: Ordinal] = object
+  TIDGen*[T: Ordinal] = object
     max: T
     freeIDs: seq[T]
 
@@ -14,7 +14,7 @@ proc next*[T](idg: PIDGen[T]): T =
   if idg.freeIDs.len > 0:
     result = idg.freeIDs.pop
   elif idg.max < high(T)-T(1):
-    idg.max += 1
+    inc idg.max
     result = idg.max
   else:
     nil #system meltdown

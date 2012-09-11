@@ -6,7 +6,7 @@ type
     CServer = 0'i8, CPlayer, CUnknown
   PClient* = ref TClient
   TClient* = object of TObject
-    id*: uint16
+    id*: int32
     addy*: TupAddress
     clientID*: uint16
     auth*: bool
@@ -30,7 +30,7 @@ type
   TIDGen[T: Ordinal] = object
     max: T
     freeIDs: seq[T]
-var cliID: PIDGen[uint16]
+var cliID = newIdGen[int32]()
 
 proc sendMessage*(client: PClient; txt: string)
 proc sendError*(client: PClient; txt: string)
@@ -95,8 +95,6 @@ proc checksumStr*(str: string): TChecksumFile =
   result.unpackedSize = str.len
   result.sum = toMD5(str)
   result.compressed = compress(str)
-
-cliID = newIDGen[uint16]()#[uint16]()
 
 when isMainModule:
   echo cliID.next()

@@ -92,7 +92,7 @@ type
     transfer: ScFileTransfer
     file: ptr FileChallengePair
 const FileChunkSize = 256
-var fileChallenges = initTable[uint16, PFileChallengeSequence](32)
+var fileChallenges = initTable[int32, PFileChallengeSequence](32)
 
 proc next*(challenge: PFileChallengeSequence, client: PClient)
 proc sendChunk*(challenge: PFileChallengeSequence, client: PClient)

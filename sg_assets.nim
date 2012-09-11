@@ -109,8 +109,8 @@ const
   MomentMult* = 0.62 ## global moment of inertia multiplier
 var 
   cfg: PZoneSettings
-  SpriteSheets = initTable[string, PSpriteSheet](64)
-  SoundCache = initTable[string, PSoundRecord](64)
+  SpriteSheets* = initTable[string, PSpriteSheet](64)
+  SoundCache  * = initTable[string, PSoundRecord](64)
   nameToVehID*: TTable[string, int]
   nameToItemID*: TTable[string, int]
   nameToObjID*: TTable[string, int]
