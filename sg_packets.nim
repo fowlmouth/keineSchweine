@@ -1,4 +1,4 @@
-import genpacket, sockets, md5
+import genpacket_enet, sockets, md5, enet, estreams
 defPacketImports()
 
 type
@@ -9,9 +9,9 @@ template idpacket(pktName, id, s2c, c2s: expr): stmt {.immediate, dirty.} =
   defPacket(`Sc pktName`, s2c)
   defPacket(`Cs pktName`, c2s)
 
-forwardPacket(Uint8, int8)
-forwardPacket(Uint16, int16)
-forwardPacket(TPort, int16)
+forwardPacketT(Uint8, int8)
+forwardPacketT(Uint16, int16)
+forwardPacketT(TPort, int16)
 
 idPacket(Login, 'a',
   tuple[id: int32; alias: string; sessionKey: string],
@@ -32,7 +32,7 @@ defPacket(Poing, tuple[id: int32, time: float32])
 
 type ChatType* = enum
   CPub = 0'i8, CPriv, CSystem, CError
-forwardPacket(ChatType, int8)
+forwardPacketT(ChatType, int8)
 idPacket(Chat, 'C', 
   tuple[kind: ChatType = CPub; fromPlayer: string = ""; text: string = ""],
   tuple[target: string = ""; text: string = ""])
@@ -56,13 +56,13 @@ idPacket(ZoneQuery, 'Q',
 
 type SpawnKind = enum
   SpawnItem = 1'i8, SpawnVehicle, SpawnObject
-forwardPacket(SpawnKind, int8)
+forwardPacketT(SpawnKind, int8)
 defPacket(ScSpawn, tuple[
   kind: SpawnKind; id: uint16; record: uint16; amount: uint16])
 
 type TAssetType* = enum
   FZoneCfg = 1'i8, FGraphics, FSound 
-forwardPacket(TAssetType, int8)
+forwardPacketT(TAssetType, int8)
 forwardPacket(MD5Digest, array[0..15, int8])
 idPacket(FileChallenge, 'F', 
   tuple[file: string; assetType: TAssetType; fullLen: int32],

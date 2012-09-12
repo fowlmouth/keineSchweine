@@ -271,15 +271,21 @@ proc lobbyInit*() =
   downloadProgress.bg.setFillColor(color(34, 139, 34))
   downloadProgress.bg.setSize(vec2f(0, 0))
   
+  var pos = vec2f(10, 10)
   u_alias = gui.newTextEntry(
     if s.existsKey("alias"): s["alias"].str else: "alias", 
-    vec2f(10.0, 10.0))
-  u_passwd = gui.newTextEntry("buzz", vec2f(10.0, 30.0))
+    pos)
+  pos.y += 20
+  u_passwd = gui.newTextEntry("buzz", pos)
+  pos.y += 20
   connectionButtons.add(gui.newButton(
     text = "Login", 
-    position = vec2f(10.0, 50.0),
+    position = pos,
     onClick = tryLogin,
     startEnabled = false))
+  pos.y += 20
+  fpsText.setPosition(pos)
+  
   playBtn = gui.newButton(
     text = "Play",
     position = vec2f(680.0, 8.0),

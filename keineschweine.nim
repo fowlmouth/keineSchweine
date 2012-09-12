@@ -2,7 +2,7 @@ import
   os, math, strutils, gl, tables,
   sfml, sfml_vector, sfml_audio, sfml_colors, chipmunk, math_helpers,
   input_helpers, animations, vehicles, game_objects, sfml_stuff, map_filter,
-  sg_lobby, sg_gui, sg_assets, sound_buffer
+  sg_gui, sg_assets, sound_buffer, enet_client
 {.deadCodeElim: on.}
 type
   PPlayer* = ref TPlayer
@@ -73,6 +73,7 @@ when defined(escapeMenuTest):
     pos = vec2f(0, 0)
   escMenu.newButton("Some Website", pos, proc(b: PButton) =
     openDefaultBrowser(getClientSettings().website))
+  pos.y += 20.0
   escMenu.newButton("Back to Lobby", pos, proc(b: PButton) =
     echo "herro")
   proc toggleEscape() =
@@ -584,6 +585,9 @@ proc mainRender() =
   
   window.setView(guiView)
   
+  when defined(EscapeMenuTest):
+    if escMenuOpen:
+      window.draw escMenu
   when defined(showFPS):
     window.draw(fpsText)
   when defined(recordMode):

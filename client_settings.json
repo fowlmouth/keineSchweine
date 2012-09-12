@@ -4,7 +4,7 @@
  "alias": "foo",
  "directory-server":{
   "host":"localhost",
-  "port":2049
+  "port":8024
  },
  "website":"https://github.com/fowlmouth/keineSchweine"
 }

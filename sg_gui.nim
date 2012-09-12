@@ -1,6 +1,7 @@
 import
   sfml, sfml_vector, sfml_colors, 
   input_helpers, sg_packets
+from strutils import countlines
 {.deadCodeElim: on.}
 type
   PGuiContainer* = ref TGuiContainer
@@ -30,9 +31,11 @@ type
     texts: seq[PText]
     scrollBack*: int
     sizeVisible*: int
+    direction*: int
   TMessage = object
     color: TColor
     text: string
+    lines: int
   TButtonClicked = proc(button: PButton)
 var
   guiFont* = newFont("data/fnt/LiberationMono-Regular.ttf")
@@ -63,8 +66,9 @@ proc setString*(b: PButton; s: string) {.inline.}
 proc newButton*(container: PGuiContainer; text: string; position: TVector2f; 
   onClick: TButtonClicked; startEnabled: bool = true): PButton {.discardable.}
 proc init(b: PButton; text: string; position: TVector2f; onClick: TButtonClicked)
-proc disable*(b: PButton)
-proc enable*(b: PButton)
+proc setEnabled*(b: PButton; enabled: bool)
+proc disable*(b: PButton) {.inline.}
+proc enable*(b: PButton) {.inline.}
 
 proc newTextEntry*(container: PGuiContainer; text: string;
                     position: TVector2f; onEnter: TInputFinishedProc = nil): PTextEntry {.discardable.}
@@ -130,6 +134,7 @@ proc newButton*(container: PGuiContainer; text: string;
        onClick)
   container.add result
   if not startEnabled: disable(result)
+
 proc init(b: PButton; text: string; position: TVector2f; onClick: TButtonClicked) =
   b.bg = newRectangleShape()
   b.bg.setSize(vec2f(80.0, 16.0))
@@ -145,12 +150,15 @@ proc copy*(c: PButton): PButton =
   result.onClick = c.onClick
   result.setPosition(result.bg.getPosition())
 
-proc enable*(b: PButton) =
-  b.enabled = true
-  b.text.setColor(White)
-proc disable*(b: PButton) =
-  b.enabled = false
-  b.text.setColor(Gray)
+proc setEnabled*(b: PButton; enabled: bool) =
+  b.enabled = enabled
+  if enabled:
+    b.text.setColor(White)
+  else:
+    b.text.setColor(Gray)
+proc enable*(b: PButton) = setEnabled(b, true)
+proc disable*(b: PButton) = setEnabled(b, false)
+
 proc draw*(window: PRenderWindow; b: PButton) =
   window.draw b.bg
   window.draw b.text
@@ -214,7 +222,9 @@ proc newMessageArea*(container: PGuiContainer; position: TVector2f): PMessageAre
   result.pos = position + container.position
   result.sizeVisible = 10
   result.scrollBack = 0
+  result.direction = -1 ## to push old messages up
   container.add(result)
+  
 proc add*(m: PMessageArea, msg: ScChat) =
   const prependName = {CPub, CPriv}
   var mmm: TMessage
@@ -229,6 +239,8 @@ proc add*(m: PMessageArea, msg: ScChat) =
   of CPub:  mmm.color = RoyalBlue
   of CPriv, CSystem: mmm.color = Green
   of CError: mmm.color = Red
+  
+  mmm.lines = countLines(mmm.text)+1
   
   m.messages.add mmm
   update m
@@ -257,8 +269,9 @@ proc update*(m: PMessageArea) =
   var pos = vec2f(m.pos.x, m.pos.y)
   for i in 0.. min(m.sizeVisible, nmsgs)-1:
     ##echo nmsgs - i - 1 - m.scrollBack
-    proctor(m.texts[i], addr m.messages[nmsgs - i - 1 - m.scrollBack], addr pos)
-    pos.y -= 16.0
+    let msg = addr m.messages[nmsgs - i - 1 - m.scrollBack]
+    proctor(m.texts[i], msg, addr pos)
+    pos.y += (16 * m.direction * msg.lines).cfloat  
 
 proc draw*(window: PRenderWindow; m: PMessageArea) =
   let nmsgs = len(m.texts)

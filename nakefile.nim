@@ -3,7 +3,7 @@ nakeImports
 
 const 
   GameAssets = "http://dl.dropbox.com/u/37533467/data-08-01-2012.7z"
-  BinLibs = "http://dl.dropbox.com/u/37533467/libs-2012-09-09.zip"
+  BinLibs = "http://dl.dropbox.com/u/37533467/libs-2012-09-12.zip"
   ExeName = "keineschweine"
   ServerDefines = "-d:NoSFML -d:NoChipmunk"
   TestBuildDefines = "-d:escapeMenuTest -d:debugWeps -d:showFPS -d:moreNimrod -d:debugKeys -d:foo -d:recordMode --forceBuild"
@@ -14,7 +14,7 @@ task "test", "Build with test defines":
   if shell("nimrod", TestBuildDefines, "compile", ExeName) != 0:
     echo "The build failed."
     quit 1
-  shell "."/ExeName, "offline"
+  shell "."/ExeName#, "offline"
 
 task "test2", "Build release test build test release build":
   if shell("nimrod", ReleaseDefines, ReleaseTestDefines, "compile", ExeName) == 0:
