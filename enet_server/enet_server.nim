@@ -1,14 +1,16 @@
 import enet, strutils, sfml, sfml_colors, sfml_vector, 
   input_helpers, sg_gui, sfml_stuff, idgen, tables, math_helpers, 
-  estreams, sg_packets, server_utils
+  estreams, sg_packets, server_utils, sg_assets, client_helpers
 type
   TCallback = proc(client: PClient; buffer: PBuffer)
+  FileChallengePair = tuple[challenge: ScFileChallenge; file: TChecksumFile]
 var
   server: PHost
   event: enet.TEvent
   clientID = newIDGen[int32]()
   clients = initTable[int32, PClient](64)
   handlers = initTable[char, TCallback](32) 
+  myAssets: seq[FileChallengePair] = @[]
 
 when true:
   var
@@ -32,9 +34,15 @@ when true:
     for it in items(args):
       s.add it
     chatbox.add(s)
+  proc dispError(args: varargs[string, `$`]) =
+    var s = ""
+    for it in items(args): s.add(it)
+    chatBox.add(newScChat(kind = CError, text = s))
 else:
   template dispMessage(args: varargs[expr]) =
     echo("<msg> ", args)
+  template dispError(args: varargs[expr]) =
+    echo("***", args)
 
 
 var pubChatQueue = newBuffer(1024)
@@ -64,6 +72,8 @@ handlers[HLogin] = proc(client: PClient; buffer: PBuffer) =
     return
   client.alias = info.alias
   client.auth = true
+  var resp = newScLogin(client.id, client.alias, "sessionkeylulz")
+  client.send HLogin, resp
   client.sendMessage "welcome"
   
 
@@ -78,14 +88,85 @@ proc `$`(client: PClient): string =
   result = "(client #$1 $2)".format(client.id, client.alias)
 
 when isMainModule:
-  var address: enet.TAddress
+  import parseopt, matchers, os, json
+  
+  
   if enetInit() != 0:
     quit "Could not initialize ENet"
+  
+  var address: enet.TAddress
+  
+  block:
+    var zoneCfgFile = "./server_settings.json"
+    for kind, key, val in getOpt():
+      case kind
+      of cmdShortOption, cmdLongOption:
+        case key
+        of "f", "file": 
+          if existsFile(val):
+            zoneCfgFile = val
+          else:
+            echo("File does not exist: ", val)
+        else:
+          echo("Unknown option: ", key," ", val)
+      else:
+        echo("Unknown option: ", key, " ", val)
+    var jsonSettings = parseFile(zoneCfgFile)
+    let 
+      port = uint16(jsonSettings["port"].num)
+      zoneFile = jsonSettings["settings"].str
+      dirServerInfo = jsonSettings["dirserver"]
+    
+    address.host = EnetHostAny
+    address.port = port
+    
+    var path = getAppDir()/../"data"/zoneFile
+    if not existsFile(path):
+      echo("Zone settings file does not exist: ../data/", zoneFile)
+      echo(path)
+      quit(1)
+    
+    block:
+      var 
+        TestFile: FileChallengePair
+        contents = repeatStr(2, "abcdefghijklmnopqrstuvwxyz")
+      testFile.challenge = newScFileChallenge("foobar.test", FZoneCfg, contents.len.int32) 
+      testFile.file = checksumStr(contents)
+      myAssets.add testFile
+    
+    setCurrentDir getAppDir().parentDir()
+    let zonesettings = readFile(path)
+    var 
+      errors: seq[string] = @[]
+    if not loadSettings(zoneSettings, errors):
+      echo("You have errors in your zone settings:")
+      for e in errors: echo("**", e)
+      quit(1)
+    errors.setLen 0
+    
+    var pair: FileChallengePair
+    pair.challenge.file = zoneFile
+    pair.challenge.assetType = FZoneCfg
+    pair.challenge.fullLen = zoneSettings.len.int32
+    pair.file = checksumStr(zoneSettings)
+    myAssets.add pair
+    
+    allAssets:
+      if not load(asset):
+        echo "Invalid or missing file ", file
+      else:
+        var pair: FileChallengePair
+        pair.challenge.file = file
+        pair.challenge.assetType = assetType
+        pair.challenge.fullLen = getFileSize(
+          expandPath(assetType, file)).int32
+        pair.file = asset.contents
+        myAssets.add pair
+    
+    echo "Zone has ", myAssets.len, " associated assets"
+  
 
-  address.host = EnetHostAny
-  address.port = 8024
-
-  server = enet.createHost(addr address, 32, 2,  0,  0)
+  server = enet.createHost(address, 32, 2,  0,  0)
   if server == nil:
     quit "Could not create the server!"
   
@@ -93,13 +174,13 @@ when isMainModule:
   
   var 
     serverRunning = true
-  when not defined(NoSFML):
+  when true:
     var frameRate = newClock()
     var pubChatDelay = newClock()
   
   while serverRunning:
     let dt = frameRate.restart.asMilliseconds().float / 1000.0
-    when not defined(NoSFML):
+    when true:
       for event in window.filterEvents():
         case event.kind
         of sfml.EvtClosed:
@@ -127,26 +208,21 @@ when isMainModule:
           echo "Replied"
       of EvtReceive:
         let client = clients[cast[ptr int32](event.peer.data)[]] 
-        chatBox.add("Recvd ($1) $2 ".format(
-          event.packet.dataLength,
-          $event.packet.data))
         
         echo("Packet: ", repr(event.packet))
         var buf = newBuffer(event.packet)
         echo("Buffer: ", repr(buf))
         let k = buf.readChar()
         if handlers.hasKey(k):
-          dispMessage("has msg")
           handlers[k](client, buf)
         else:
-          dispMessage("Unknown packet")
+          dispError("Unknown packet from ", client)
         
         destroy(event.packet)
       of EvtDisconnect:
         var
           id = cast[ptr int32](event.peer.data)[]
           client = clients[id]
-          #id = cast[ptr int32](event.peer.data)[] 
         if client.isNil:
           dispmessage("CLIENT IS NIL!")
           dispmessage(event.peer.data.isNil)

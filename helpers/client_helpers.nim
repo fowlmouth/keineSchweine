@@ -1,100 +1,48 @@
 import 
   sockets, streams, tables,
-  sg_packets
+  sg_packets, enet, estreams
 type
-  PServer* = ref TServer
+  PServer* = ptr TServer
   TServer* = object
-    sock*: TSocket
-    outgoing*: PStringStream
+    connected*: bool
+    addy: enet.TAddress
+    host*: PHost
+    peer*: PPeer
     handlers*: TTable[char, TScPktHandler]
-  TScPktHandler* = proc(serv: PServer; stream: PStream)
-var
-  incoming = newStringStream("")
+  TScPktHandler* = proc(serv: PServer; buffer: PBuffer)
 
-incoming.data.setLen 1024
-incoming.data.setLen 0
-incoming.flushImpl = proc(stream: PStream) =
-  stream.setPosition 0
-  PStringStream(stream).data.setLen 0
 
-proc newServerConnection*(host: string; port: TPort): PServer =
-  new(result)
-  echo "Connecting to ", host, ":", port
-  result.sock = socket(typ = SOCK_DGRAM, protocol = IPPROTO_UDP, buffered = false)
-  result.sock.connect host, port
-  result.outgoing = newStringStream("")
-  result.outgoing.data.setLen 1024
-  result.outgoing.data.setLen 0
-  result.outgoing.flushImpl = proc(stream: PStream) =
-    if stream.getPosition == 0: return
-    echo ">> ", repr(PStringStream(stream).data)
-    stream.setPosition 0
-    PStringStream(stream).data.setLen 0
-  result.handlers = initTable[char, TScPktHandler](16)
+proc send*[T](serv: PServer; packetType: char; pkt: var T) =
+  if serv.connected:
+    var b = newBuffer(100)
+    b.write packetType
+    b.pack pkt
+    discard serv.peer.send(0.cuchar, b, FlagUnsequenced)
+proc sendPubChat*(server: PServer; msg: string) =
+  var chat = newCsChat("", msg)
+  server.send HChat, chat
 
-proc flush*(serv: PServer) =
-  if serv.outgoing.getPosition > 0:
-    let res = serv.sock.sendAsync(serv.outgoing.data)
-    echo "send res: ", res
-    echo repr(serv.outgoing.data)
-    serv.outgoing.flush()
-proc close*(s: PServer) =
-  s.sock.close
-  s.outgoing.flush
-
-proc writePkt*[T](serv: PServer; pid: PacketID, p: var T) =
-  if serv.isNil: return
-  serv.outgoing.write(pid)
-  p.pack(serv.outgoing)
-proc send*[T](serv: PServer; pid: PacketID; p: var T) {.inline.} =
-  writePkt(serv, pid, p)
-
-proc sendChat*(serv: PServer; text: string) =
-  var pkt = newCsChat(text = text)
-  serv.writePkt HChat, pkt
-
-proc handlePkts(serv: PServer; stream: PStream) =
-  while not stream.atEnd:
-    echo "<< ", repr(PStringStream(stream).data[stream.getPosition()..high(PStringStream(stream).data)])
-    var typ = readChar(stream)
-    if not serv.handlers.hasKey(typ):
-      echo("Unknown pkt ", repr(typ), '(', typ.ord,')')
-      break
+proc handlePackets*(server: PServer; buf: PBuffer) =
+  while not buf.atEnd():
+    let typ = readChar(buf)
+    if server.handlers.hasKey(typ):
+      server.handlers[typ](server, buf)
     else:
-      serv.handlers[typ](serv, stream)
+      break
 
-proc expandPath*(assetType: TAssetType; fileName: string): string =
-  result = "data/"
-  case assetType
-  of FGraphics: result.add "gfx/"
-  of FSound:    result.add "sfx/"
-  else: nil
-  result.add fileName
-proc expandPath*(fc: ScFileChallenge): string {.inline.} =
-  result = expandPath(fc.assetType, fc.file)
+proc connect*(serv: PServer; host: string; port: int16) =
+  if setHost(serv.addy, host) != 0:
+    quit "Could not set host"
+  serv.addy.port = port.cushort
+  serv.peer = serv.host.connect(serv.addy, 2, 0)
+  if serv.peer == nil:
+    quit "No available peers"
+proc newServer*(host: string; port: int16): PServer =
+  result = cast[ptr TServer](alloc0(sizeof(TServer)))
+  result.connected = false
+  result.host = createHost(nil, 1, 2, 0, 0)
+  result.handlers = initTable[char, TScPktHandler](32)
+  result.connect(host, port)
 
-const ChunkSize = 512
-proc pollServer*(s: PServer; timeout: int): bool =
-  if s.isNil or s.sock.isNil: return true
-  var
-    ws = @[s.sock]
-    rs = @[s.sock]
-  if select(rs, timeout).bool:
-    while true:
-      let pos = incoming.data.len
-      setLen(incoming.data, pos + ChunkSize)
-      #let res = client.recvAsync(incoming.data)
-      let res = s.sock.recv(addr incoming.data[pos], ChunkSize)
-      echo("Read ", res)
-      if res > 0:
-        if res < ChunkSize:
-          incoming.data.setLen(incoming.data.len - (ChunkSize - res))
-          break
-      else:
-        incoming.data.setLen pos
-        break
-    handlePkts(s, incoming)
-    incoming.flush()
-  if selectWrite(ws, timeout).bool:
-    s.flush()
-  result = true
+
+

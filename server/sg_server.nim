@@ -2,12 +2,10 @@ import
   sockets, times, streams, streams_enh, tables, json, os, unsigned,
   sg_packets, sg_assets, md5, server_utils, client_helpers
 type
-  THandler = proc(client: PCLient; stream: PStream)
   FileChallengePair = tuple[challenge: ScFileChallenge; file: TChecksumFile]
 var
   server: TSocket
   dirServer: PServer
-  handlers = initTable[char, THandler](16)
   thisZone = newScZoneRecord("local", "sup")
   thisZoneSettings: PZoneSettings
   dirServerConnected = false

@@ -97,7 +97,6 @@ proc readFloat32*(buffer: PBuffer): float32 =
 proc readFloat64*(buffer: PBuffer): float64 =
   read buffer, result
 proc readStr*(buffer: PBuffer): string =
-  echo "buffer pos: ", buffer.pos
   let len = readInt16(buffer).int
   result = ""
   if len > 0:

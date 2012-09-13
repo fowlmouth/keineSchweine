@@ -1,7 +1,7 @@
 import enet, strutils,
   sfml, sfml_vector, sfml_colors, sg_gui, input_helpers,
   math_helpers, sg_packets, estreams, tables,
-  json, sg_assets
+  json, sg_assets, client_helpers
 if enetInit() != 0:
   quit "Could not initialize ENet"
 type
@@ -10,15 +10,7 @@ type
     offlineFile: string
     dirserver: tuple[host: string, port: int16]
     website*: string
-  PServer = ptr TServer
-  TServer = object
-    connected: bool
-    addy: enet.TAddress
-    host: PHost
-    peer: PPeer
-    handlers: TTable[char, TCallback]
   
-  TCallback = proc(serv: PServer; buffer: PBuffer) 
 var
   clientSettings: TClientSettings
   event: enet.TEvent
@@ -48,28 +40,6 @@ proc handlePlayerLogin(server: PServer; buf: PBuffer) =
   myCreds = login
   echo("I am ", $myCreds)
 
-proc handlePackets(server: PServer; buf: PBuffer) =
-  while not buf.atEnd():
-    let typ = readChar(buf)
-    if server.handlers.hasKey(typ):
-      server.handlers[typ](server, buf)
-    else:
-      break
-
-proc connect(serv: PServer; host: string; port: int16) =
-  if setHost(serv.addy, host) != 0:
-    quit "Could not set host"
-  serv.addy.port = port.cushort
-  serv.peer = serv.host.connect(serv.addy, 2, 0)
-  if serv.peer == nil:
-    quit "No available peers"
-proc newServer(host: string; port: int16): PServer =
-  result = cast[ptr TServer](alloc0(sizeof(TServer)))
-  result.connected = false
-  result.host = createHost(nil, 1, 2, 0, 0)
-  result.handlers = initTable[char, TCallback](32)
-  result.connect(host, port)
-proc sendPubChat(server: PServer; msg: string)
 
 kc.registerHandler MouseLeft, down, proc() =
   gui.click(input_helpers.getMousePos())
@@ -91,16 +61,6 @@ proc dispMessage(args: varargs[string, `$`]) =
   chatbox.add(s)
 proc dispMessage(text: string) {.inline.} =
   chatbox.add(text)
-
-proc send*[T](serv: PServer; packetType: char; pkt: var T) =
-  if serv.connected:
-    var b = newBuffer(100)
-    b.write packetType
-    b.pack pkt
-    discard serv.peer.send(0.cuchar, b, FlagUnsequenced)
-proc sendPubChat(server: PServer; msg: string) =
-  var chat = newCsChat("", msg)
-  server.send HChat, chat
 
 proc updateButtons() =
   let conn = dirServer.connected
@@ -126,7 +86,7 @@ proc poll(serv: PServer; timeout: cuint = 30) =
       else:
         echo repr(event)
   else:
-    if serv.host.hostService(event, 40) > 0 and event.kind == EvtConnect:
+    if serv.host.hostService(event, timeout) > 0 and event.kind == EvtConnect:
       dispMessage "Connected"
       serv.connected = true
       if serv.peer != event.peer:

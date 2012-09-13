@@ -1,5 +1,5 @@
 import
-  re, json, strutils, tables, math, os, math_helpers
+  re, json, strutils, tables, math, os, math_helpers, sg_packets
 
 when defined(NoSFML):
   import server_utils
@@ -221,15 +221,24 @@ cacheImpl newSound, SoundCache, PSoundRecord:
   result.file = filename
   checkFile("data/sfx"/result.file)
 
+proc expandPath*(assetType: TAssetType; fileName: string): string =
+  result = "data/"
+  case assetType
+  of FGraphics: result.add "gfx/"
+  of FSound:    result.add "sfx/"
+  else: nil
+  result.add fileName
+proc expandPath*(fc: ScFileChallenge): string {.inline.} =
+  result = expandPath(fc.assetType, fc.file)
 
 when defined(NoSFML):
   proc load*(ss: PSpriteSheet): bool =
     if not ss.contents.unpackedSize == 0: return
-    ss.contents = checksumFile(ss.file)
+    ss.contents = checksumFile(expandPath(FGraphics, ss.file))
     result = true
   proc load*(s: PSoundRecord): bool =
     if not s.contents.unpackedSize == 0: return
-    s.contents = checksumFile(s.file)
+    s.contents = checksumFile(expandPath(FSound, s.file))
     result = true
 else:
   proc load*(ss: PSpriteSheet): bool =
