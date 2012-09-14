@@ -1,13 +1,12 @@
-import enet, strutils, 
-  input_helpers, sfml_stuff, idgen, tables, math_helpers, 
+import enet, strutils, idgen, tables, math_helpers, 
   estreams, sg_packets, server_utils, sg_assets, client_helpers
 when appType == "gui":
-  import sfml, sfml_colors, sfml_vector, sg_gui, sfml_stuff
+  import sfml, sfml_colors, sfml_vector, sg_gui,
+    input_helpers, sfml_stuff
 else:
   import times
 type
   TCallback = proc(client: PClient; buffer: PBuffer)
-  FileChallengePair = tuple[challenge: ScFileChallenge; file: TChecksumFile]
 var
   server: PHost
   dirServer: PServer
@@ -16,7 +15,6 @@ var
   clientID = newIDGen[int32]()
   clients = initTable[int32, PClient](64)
   handlers = initTable[char, TCallback](32) 
-  myAssets: seq[FileChallengePair] = @[]
 
 when appType == "gui":
   var
@@ -92,6 +90,17 @@ handlers[HLogin] = proc(client: PClient; buffer: PBuffer) =
   client.send HLogin, resp
   client.sendMessage "welcome"
   dispMessage("Client logged in: ", client)
+
+
+handlers[HFileTransfer] = server_utils.handleFilePartAck
+handlers[HFileChallenge] = server_utils.handleFileChallengeResp
+
+handlers[HZoneJoinReq] = proc(client: PClient; buffer: PBuffer) =
+  var info = readCsZoneJoinReq(buffer)
+  dispmessage "Got zone join request"
+  client.startVerifyingFiles()
+
+
 
 when isMainModule:
   import parseopt, matchers, os, json
@@ -239,9 +248,7 @@ when isMainModule:
       of EvtReceive:
         let client = clients[cast[ptr int32](event.peer.data)[]] 
         
-        echo("Packet: ", repr(event.packet))
         var buf = newBuffer(event.packet)
-        echo("Buffer: ", repr(buf))
         let k = buf.readChar()
         if handlers.hasKey(k):
           handlers[k](client, buf)

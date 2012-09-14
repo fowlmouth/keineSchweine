@@ -25,12 +25,12 @@ var
   loginBtn, playBtn: PButton
   fpsText = newText("", guiFont, 18)
   connectionButtons: seq[PButton]
-  downloadProgress, connectButton: PButton
+  connectButton: PButton
   u_alias, u_passwd: PTextEntry
   dirServer: PServer
   zone: PServer
   showZoneList = false
-  myCreds: ScLogin ##my session token
+  myCreds = newScLogin(0, "", "") ##my session token
 
 proc handleChat(server: PServer; buf: PBuffer) =
   let msg = readScChat(buf)
@@ -144,11 +144,6 @@ proc lobbyInit*() =
   zonelist.setPosition(vec2f(200.0, 100.0))
   connectionButtons = @[]
   
-  downloadProgress = gui.newButton(
-    text = "", position = vec2f(10, 130), onClick = nil) 
-  downloadProgress.bg.setFillColor(color(34, 139, 34))
-  downloadProgress.bg.setSize(vec2f(0, 0))
-  
   var pos = vec2f(10, 10)
   u_alias = gui.newTextEntry(
     if s.existsKey("alias"): s["alias"].str else: "alias", 
@@ -168,6 +163,24 @@ proc lobbyInit*() =
     text = "Connect",
     position = pos,
     onClick = tryConnect)
+  pos.y += 20
+  gui.newButton("Test Files", position = pos, onClick = proc(b: PButton) =
+    var req = newCsZoneJoinReq(myCreds)
+    dirServer.send HZoneJoinReq, req)
+  pos.y += 20
+  connectionButtons.add(gui.newButton(
+    text = "Test Chat",
+    position = pos,
+    onClick = (proc(b: PButton) = 
+      var pkt = newCsChat(text = "ohai")
+      dirServer.send HChat, pkt),
+    startEnabled = false))
+  pos.y += 20
+  downloadProgress.setPosition(pos) 
+  downloadProgress.bg.setFillColor(color(34, 139, 34))
+  downloadProgress.bg.setSize(vec2f(0, 0))
+  gui.add(downloadProgress)
+  
   playBtn = gui.newButton(
     text = "Play",
     position = vec2f(680.0, 8.0),
@@ -177,14 +190,6 @@ proc lobbyInit*() =
     text = "Play Offline",
     position = vec2f(680.0, 28.0),
     onClick = playOffline)
-  discard """"""
-  connectionButtons.add(gui.newButton(
-    text = "Test Chat",
-    position = vec2f(10.0, 110.0),
-    onClick = (proc(b: PButton) = 
-      var pkt = newCsChat(text = "ohai")
-      dirServer.send HChat, pkt),
-    startEnabled = false))
   discard """gui.newButton(text = "Scrollback + 1", position = vec2f(185, 10), onClick = proc(b: PButton) =
     messageArea.scrollBack += 1
     update(messageArea))
@@ -197,6 +202,9 @@ proc lobbyInit*() =
   dirServer = newServer() 
   dirServer.addHandler(HChat, handleChat)
   dirServer.addHandler(HLogin, handlePlayerLogin)
+  dirServer.addHandler(HFileTransfer, client_helpers.handleFilePartRecv)
+  dirServer.addHandler HChallengeResult, client_helpers.handleFileChallengeResult
+  dirServer.addHandler HFileChallenge, client_helpers.handleFileChallenge
 
 proc lobbyReady*() = 
   kc.setActive()

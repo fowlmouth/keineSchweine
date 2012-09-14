@@ -96,11 +96,3 @@ proc checksumStr*(str: string): TChecksumFile =
   result.sum = toMD5(str)
   result.compressed = compress(str)
 
-when isMainModule:
-  echo cliID.next()
-  echo cliID.next()
-  echo cliID.next()
-  quit(0)
-
-discard """def validateAlias*(alias: string): bool =
-  """

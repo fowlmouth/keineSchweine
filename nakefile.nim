@@ -12,27 +12,33 @@ const
 
 task "test", "Build with test defines":
   if shell("nimrod", TestBuildDefines, "compile", ExeName) != 0:
-    echo "The build failed."
-    quit 1
-  shell "."/ExeName#, "offline"
+    quit "The build failed."
+
+task "testrun", "Build with test defines and run":
+  runTask "test"
+  shell "."/ExeName
 
 task "test2", "Build release test build test release build":
   if shell("nimrod", ReleaseDefines, ReleaseTestDefines, "compile", ExeName) == 0:
     shell "."/ExeName
 
-task "dirserver", "build the directory server":
+discard """task "dirserver", "build the directory server":
   withDir "server":
     if shell("nimrod", ServerDefines, "compile", "dirserver") != 0:
       echo "Failed to build the dirserver"
-      quit 1
+      quit 1"""
+
 task "zoneserver", "build the zone server":
-  withDir "server":
-    if shell("nimrod", ServerDefines, "compile", "sg_server") != 0:
-      echo "Failed to build the zoneserver"
-      quit 1
+  withDir "enet_server":
+    if shell("nimrod", ServerDefines, "compile", "enet_server") != 0:
+      quit "Failed to build the zoneserver"
+task "zoneserver-gui", "build the zone server, with gui!":
+  withDir "enet_server":
+    if shell("nimrod", ServerDefines, "--app:gui", "compile", "enet_server") != 0:
+      quit "Failed to build the zoneserver"
 
 task "servers", "build the server and directory server":
-  runTask "dirserver"
+  #runTask "dirserver"
   runTask "zoneserver"
   echo "Successfully built both servers :')"
 
@@ -56,8 +62,7 @@ task "testskel", "create skeleton test dir for testing":
     createDir("test/data/fnt")
   if not existsFile("test/data/fnt/LiberationMono-Regular.ttf"):
     copyFile "data/fnt/LiberationMono-Regular", "test/data/fnt/LiberationMono-Regular.ttf"
-  if not existsFile("test/client_settings.json"):
-    copyFile "client_settings.json", "test/client_settings.json"
+  copyFile "client_settings.json", "test/client_settings.json"
   runTask "test"
   copyFile ExeName, "test"/ExeName
   withDir "test":
@@ -99,11 +104,12 @@ task "download", "download game assets":
     when defined(linux):
       let z7 = findExe("7z")
       if z7 == "":
-        quit "Could not find 7z"
-      if shell(z7, "t", path) != 0: ##note to self: make sure this is right
-        quit "Bad download"
-      echo "Unpacking..."
-      shell(z7, "x", "-w[$1]" % targetDir, path)
+        echo "Could not find 7z"
+      elif shell(z7, "t", path) != 0: ##note to self: make sure this is right
+        echo "Bad download"
+      else:
+        echo "Unpacking..."
+        shell(z7, "x", "-w[$1]" % targetDir, path)
     else:
       echo "I do not know how to unpack the data on this system. Perhaps you could ",
         "fill this part in?"

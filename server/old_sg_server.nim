@@ -1,15 +1,11 @@
 import
   sockets, times, streams, streams_enh, tables, json, os, unsigned,
   sg_packets, sg_assets, md5, server_utils, client_helpers
-type
-  FileChallengePair = tuple[challenge: ScFileChallenge; file: TChecksumFile]
 var
-  server: TSocket
   dirServer: PServer
   thisZone = newScZoneRecord("local", "sup")
   thisZoneSettings: PZoneSettings
   dirServerConnected = false
-  myAssets: seq[FileChallengePair] = @[]
   ## I was high.
   clients = initTable[TupAddress, PClient](16)
   alias2client = initTable[string, PClient](32)
@@ -83,49 +79,7 @@ handlers[HZoneQuery] = proc(client: PClient; stream: PStream) =
   var resp = newScZoneQuery(zonePlayers.len.uint16)
   client.send(HZoneQuery, resp)
 
-type
-  PFileChallengeSequence* = ref TFileChallengeSequence 
-  TFileChallengeSequence = object
-    index: int  #which file is active
-    transfer: ScFileTransfer
-    file: ptr FileChallengePair
-const FileChunkSize = 256
-var fileChallenges = initTable[int32, PFileChallengeSequence](32)
 
-proc next*(challenge: PFileChallengeSequence, client: PClient)
-proc sendChunk*(challenge: PFileChallengeSequence, client: PClient)
-
-proc startVerifyingFiles*(client: PClient) =
-  var fcs: PFileChallengeSequence
-  new(fcs)
-  fcs.index = -1
-  fileChallenges[client.id] = fcs
-  next(fcs, client)
-
-proc next*(challenge: PFileChallengeSequence, client: PClient) =
-  inc(challenge.index)
-  if challenge.index >= myAssets.len:
-    client.sendMessage "You are cleared to enter"
-    fileChallenges.del client.id
-    return
-  challenge.file = addr myAssets[challenge.index]
-  client.send HFileChallenge, challenge.file.challenge # :rolleyes:
-
-proc sendChunk*(challenge: PFileChallengeSequence, client: PClient) =
-  let size = min(FileChunkSize, challenge.transfer.fileSize - challenge.transfer.pos)
-  challenge.transfer.data.setLen size
-  copyMem(
-    addr challenge.transfer.data[0], 
-    addr challenge.file.file.compressed[challenge.transfer.pos],
-    size)
-  client.send HFileTransfer, challenge.transfer
-
-proc startSend*(challenge: PFileChallengeSequence, client: PClient) =
-  challenge.transfer.fileSize = challenge.file.file.compressed.len().int32
-  challenge.transfer.pos = 0
-  challenge.transfer.data = ""
-  challenge.transfer.data.setLen FileChunkSize
-  challenge.sendChunk(client)
 
 handlers[HZoneJoinReq] = proc(client: PClient; stream: PStream) =
   var req = readCsZoneJoinReq(stream)
@@ -140,32 +94,7 @@ handlers[HZoneJoinReq] = proc(client: PClient; stream: PStream) =
     echo "Dirserver is disconnected =("
     client.startVerifyingFiles()
 
-handlers[HFileTransfer] = proc(client: PClient; stream: PStream) = 
-  var 
-    ftrans = readCsFilepartAck(stream)
-    fcSeq = fileChallenges[client.id]
-  fcSeq.transfer.pos = ftrans.lastPos
-  fcSeq.sendChunk client
 
-handlers[HFileChallenge] = proc(client: PClient; stream: PStream) =
-  var 
-    fcResp = readCsFileChallenge(stream)
-    fcSeq = fileChallenges[client.id]
-    resp = newScChallengeResult(false)
-  if fcResp.needFile:
-    client.sendMessage "Sending file..."
-    fcSeq.startSend(client)
-  else:
-    var res = newScChallengeResult(false)
-    if fcResp.checksum == fcSeq.file.file.sum: ##client is good
-      #client.sendMessage "Checksum is good. ("& $(fcSeq.index+1) &'/'& $(myAssets.len) &')'
-      res.status = true
-      client.send HChallengeResult, res
-      fcSeq.next(client)
-    else:
-      #client.sendMessage "Checksum is bad, sending file..."
-      client.send HChallengeResult, res
-      fcSeq.startSend(client)
 
 proc handlePkt(s: PClient; stream: PStream) =
   while not stream.atEnd:  
@@ -279,9 +208,19 @@ when isMainModule:
           expandPath(assetType, file)).int32
         pair.file = asset.contents
         myAssets.add pair
-  
-  
-      echo "Zone has ", myAssets.len, " associated assets"
+        
+    echo "Zone has ", myAssets.len, " associated assets"
+    
+      
+    dirServer = newServerConnection(dirServerInfo[0].str, dirServerInfo[1].num.TPort)
+    dirServer.handlers[HDsMsg] = proc(serv: PServer; stream: PStream) =
+      var m = readDsMsg(stream)
+      echo("DirServer> ", m.msg)
+    dirServer.handlers[HZoneLogin] = proc(serv: PServer; stream: PStream) =
+      let loggedIn = readDsZoneLogin(stream).status
+      if loggedIn:
+        dirServerConnected = true
+    dirServer.writePkt HZoneLogin, login
   
   thisZone.name = jsonSettings["name"].str
   thisZone.desc = jsonSettings["desc"].str
@@ -292,15 +231,6 @@ when isMainModule:
     thisZone)  
   #echo "MY LOGIN: ", $login
   
-  dirServer = newServerConnection(dirServerInfo[0].str, dirServerInfo[1].num.TPort)
-  dirServer.handlers[HDsMsg] = proc(serv: PServer; stream: PStream) =
-    var m = readDsMsg(stream)
-    echo("DirServer> ", m.msg)
-  dirServer.handlers[HZoneLogin] = proc(serv: PServer; stream: PStream) =
-    let loggedIn = readDsZoneLogin(stream).status
-    if loggedIn:
-      dirServerConnected = true
-  dirServer.writePkt HZoneLogin, login
   
   
   createServer(port)

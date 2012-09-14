@@ -1,5 +1,6 @@
 import
-  re, json, strutils, tables, math, os, math_helpers, sg_packets
+  re, json, strutils, tables, math, os, math_helpers, 
+  sg_packets, md5, zlib_helpers
 
 when defined(NoSFML):
   import server_utils
@@ -14,6 +15,10 @@ when not defined(NoChipmunk):
   import chipmunk
 
 type
+  TChecksumFile* = object
+    unpackedSize*: int
+    sum*: MD5Digest
+    compressed*: string
   PZoneSettings* = ref TZoneSettings
   TZoneSettings* = object
     vehicles: seq[PVehicleRecord]
@@ -152,6 +157,18 @@ proc transition*() =
 proc doneWithSaidTransition*() =
   assert activeState == Transitioning, "Finished() called from a state other than transitioning!"
   activeState = Field
+
+
+proc checksumFile*(filename: string): TChecksumFile =
+  let fullText = readFile(filename)
+  result.unpackedSize = fullText.len
+  result.sum = toMD5(fullText)
+  result.compressed = compress(fullText)
+proc checksumStr*(str: string): TChecksumFile =
+  result.unpackedSize = str.len
+  result.sum = toMD5(str)
+  result.compressed = compress(str)
+
 
 ##at this point none of these should ever be freed
 proc free*(obj: PZoneSettings) =

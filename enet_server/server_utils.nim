@@ -1,5 +1,5 @@
 import enet, sg_packets, estreams, md5, zlib_helpers, client_helpers, strutils,
-  idgen
+  idgen, sg_assets, tables
 type
   PClient* = ref object
     id*: int32
@@ -7,12 +7,17 @@ type
     alias*: string
     peer*: PPeer
   
-  TChecksumFile* = object
-    unpackedSize*: int
-    sum*: MD5Digest
-    compressed*: string
+  FileChallengePair* = tuple[challenge: ScFileChallenge; file: TChecksumFile]
+  PFileChallengeSequence* = ref TFileChallengeSequence 
+  TFileChallengeSequence = object
+    index: int  #which file is active
+    transfer: ScFileTransfer
+    file: ptr FileChallengePair
 var
   clientID = newIdGen[int32]()
+  myAssets*: seq[FileChallengePair] = @[]
+  fileChallenges = initTable[int32, PFileChallengeSequence](32)
+const FileChunkSize = 256
 
 proc free(client: PClient) =
   if client.id != 0:
@@ -39,12 +44,73 @@ proc sendError*(client: PClient; error: string) =
   client.send HChat, m
 
 
-proc checksumFile*(filename: string): TChecksumFile =
-  let fullText = readFile(filename)
-  result.unpackedSize = fullText.len
-  result.sum = toMD5(fullText)
-  result.compressed = compress(fullText)
-proc checksumStr*(str: string): TChecksumFile =
-  result.unpackedSize = str.len
-  result.sum = toMD5(str)
-  result.compressed = compress(str)
+
+
+proc next*(challenge: PFileChallengeSequence, client: PClient)
+proc sendChunk*(challenge: PFileChallengeSequence, client: PClient)
+
+proc startVerifyingFiles*(client: PClient) =
+  var fcs: PFileChallengeSequence
+  new(fcs)
+  fcs.index = -1
+  fileChallenges[client.id] = fcs
+  next(fcs, client)
+
+proc next*(challenge: PFileChallengeSequence, client: PClient) =
+  inc(challenge.index)
+  if challenge.index >= myAssets.len:
+    client.sendMessage "You are cleared to enter"
+    fileChallenges.del client.id
+    return
+  else:
+    echo myAssets.len, "assets"
+  challenge.file = addr myAssets[challenge.index]
+  client.send HFileChallenge, challenge.file.challenge # :rolleyes:
+  echo "sent challenge"
+
+proc sendChunk*(challenge: PFileChallengeSequence, client: PClient) =
+  let size = min(FileChunkSize, challenge.transfer.fileSize - challenge.transfer.pos)
+  challenge.transfer.data.setLen size
+  copyMem(
+    addr challenge.transfer.data[0], 
+    addr challenge.file.file.compressed[challenge.transfer.pos],
+    size)
+  client.send HFileTransfer, challenge.transfer
+  echo "chunk sent"
+
+proc startSend*(challenge: PFileChallengeSequence, client: PClient) =
+  challenge.transfer.fileSize = challenge.file.file.compressed.len().int32
+  challenge.transfer.pos = 0
+  challenge.transfer.data = ""
+  challenge.transfer.data.setLen FileChunkSize
+  challenge.sendChunk(client)
+  echo "starting xfer"
+
+## HFileTransfer
+proc handleFilePartAck*(client: PClient; buffer: PBuffer) =
+  var 
+    ftrans = readCsFilepartAck(buffer)
+    fcSeq = fileChallenges[client.id]
+  fcSeq.transfer.pos = ftrans.lastPos
+  fcSeq.sendChunk client
+
+## HFileCHallenge
+proc handleFileChallengeResp*(client: PClient; buffer: PBuffer) =
+  var 
+    fcResp = readCsFileChallenge(buffer)
+    fcSeq = fileChallenges[client.id]
+  if fcResp.needFile:
+    client.sendMessage "Sending file..."
+    fcSeq.startSend(client)
+  else:
+    var resp = newScChallengeResult(false)
+    if fcResp.checksum == fcSeq.file.file.sum: ##client is good
+      #client.sendMessage "Checksum is good. ("& $(fcSeq.index+1) &'/'& $(myAssets.len) &')'
+      resp.status = true
+      client.send HChallengeResult, resp
+      fcSeq.next(client)
+    else:
+      #client.sendMessage "Checksum is bad, sending file..."
+      client.send HChallengeResult, resp
+      fcSeq.startSend(client)
+

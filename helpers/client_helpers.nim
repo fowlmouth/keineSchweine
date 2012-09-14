@@ -1,6 +1,6 @@
-import 
-  sockets, streams, tables,
-  sg_packets, enet, estreams
+import  
+  tables, sg_packets, enet, estreams, sg_gui, sfml, sfml_vector,
+  zlib_helpers, md5, sg_assets, os
 type
   PServer* = ptr TServer
   TServer* = object
@@ -10,7 +10,17 @@ type
     peer*: PPeer
     handlers*: TTable[char, TScPktHandler]
   TScPktHandler* = proc(serv: PServer; buffer: PBuffer)
-
+  TFileTransfer = object
+    fileName: string
+    assetType: TAssetType
+    fullLen: int
+    pos: int32
+    data: string
+    readyToSave: bool
+var 
+  currentFileTransfer: TFileTransfer
+  downloadProgress* = newButton(nil, "", vec2f(0,0), nil)
+currentFileTransfer.data = ""
 
 proc addHandler*(serv: PServer; packetType: char; handler: TScPktHandler) =
   serv.handlers[packetType] = handler
@@ -51,3 +61,69 @@ proc handlePackets*(server: PServer; buf: PBuffer) =
       server.handlers[typ](server, buf)
     else:
       break
+
+proc updateFileProgress*() =
+  let progress = currentFileTransfer.pos / currentFileTransfer.fullLen
+  downloadProgress.bg.setSize(vec2f(progress * 100, 20))
+  downloadProgress.setString($currentFileTransfer.pos &'/'& $currentFileTransfer.fullLen)
+
+## HFileTransfer
+proc handleFilePartRecv*(serv: PServer; buffer: PBuffer) =
+  var
+    f = readScFileTransfer(buffer)
+  updateFileProgress()
+  if not(f.pos == currentFileTransfer.pos): 
+    return ##issues, probably
+  if currentFileTransfer.data.len == 0:
+    currentFileTransfer.data.setLen f.fileSize
+  let len = f.data.len
+  copymem(
+    addr currentFileTransfer.data[f.pos],
+    addr f.data[0],
+    len)
+  currentFileTransfer.pos = f.pos + len.int32
+  if currentFileTransfer.pos == f.fileSize: #file should be done, rizzight
+    currentFileTransfer.data = uncompress(
+      currentFileTransfer.data, currentFileTransfer.fullLen)
+    currentFileTransfer.readyToSave = true
+    var resp: CsFileChallenge
+    resp.checksum = toMD5(currentFileTransfer.data)
+    serv.send HFileChallenge, resp
+  else:
+    var resp = newCsFilepartAck(currentFileTransfer.pos)
+    serv.send HFileTransfer, resp
+
+proc saveCurrentFile() =
+  if not currentFileTransfer.readyToSave: return
+  let 
+    path = expandPath(currentFileTransfer.assetType, currentFileTransfer.fileName)
+    parent = parentDir(path)
+  if not existsDir(parent):
+    createDir(parent)
+    echo("Created dir")
+  writeFile path, currentFIleTransfer.data
+  echo "Write file"
+
+## HChallengeResult
+proc handleFileChallengeResult*(serv: PServer; buffer: PBuffer) =
+  var res = readScChallengeResult(buffer).status
+  if res and currentFileTransfer.readyToSave:
+    saveCurrentFile()
+
+## HFileCHallenge
+proc handleFileChallenge*(serv: PServer; buffer: PBuffer) =
+  var 
+    challenge = readScFileChallenge(buffer)
+    path = expandPath(challenge)
+    resp: CsFileChallenge
+  if not existsFile(path):
+    resp.needFile = true
+  else:
+    resp.checksum = toMD5(readFile(path))
+  currentFileTransfer.fileName = challenge.file
+  currentFileTransfer.assetType = challenge.assetType
+  currentFileTransfer.fullLen = challenge.fullLen.int
+  currentFileTransfer.pos = 0
+  currentFileTransfer.data.setLen 0
+  currentFileTransfer.readyToSave = false
+  serv.send HFileChallenge, resp
