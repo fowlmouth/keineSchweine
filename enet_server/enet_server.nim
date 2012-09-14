@@ -1,18 +1,24 @@
-import enet, strutils, sfml, sfml_colors, sfml_vector, 
-  input_helpers, sg_gui, sfml_stuff, idgen, tables, math_helpers, 
+import enet, strutils, 
+  input_helpers, sfml_stuff, idgen, tables, math_helpers, 
   estreams, sg_packets, server_utils, sg_assets, client_helpers
+when appType == "gui":
+  import sfml, sfml_colors, sfml_vector, sg_gui, sfml_stuff
+else:
+  import times
 type
   TCallback = proc(client: PClient; buffer: PBuffer)
   FileChallengePair = tuple[challenge: ScFileChallenge; file: TChecksumFile]
 var
   server: PHost
+  dirServer: PServer
+  standAloneMode = true
   event: enet.TEvent
   clientID = newIDGen[int32]()
   clients = initTable[int32, PClient](64)
   handlers = initTable[char, TCallback](32) 
   myAssets: seq[FileChallengePair] = @[]
 
-when true:
+when appType == "gui":
   var
     gui = newGuiContainer()
     chatBox = gui.newMessageArea(vec2f(15, 550))
@@ -39,10 +45,14 @@ when true:
     for it in items(args): s.add(it)
     chatBox.add(newScChat(kind = CError, text = s))
 else:
-  template dispMessage(args: varargs[expr]) =
-    echo("<msg> ", args)
-  template dispError(args: varargs[expr]) =
-    echo("***", args)
+  proc dispMessage(args: varargs[string, `$`]) =
+    var m = ""
+    for it in items(args): m.add(it)
+    echo "<msg> ", m
+  proc dispError(args: varargs[string, `$`]) =
+    var m = ""
+    for it in items(args): m.add(it)
+    echo "**", m
 
 
 var pubChatQueue = newBuffer(1024)
@@ -50,6 +60,12 @@ proc queuePub(sender: PClient, msg: CsChat) =
   var chat = newScChat(kind = CPub, fromPlayer = sender.alias, text = msg.text)
   pubChatQueue.write(HChat)
   pubChatQueue.pack(chat)
+proc flushPubChat() =
+  if pubChatQueue.isDirty:
+    let packet = pubChatQueue.toPacket(FlagReliable)
+    for id, client in pairs(clients):
+      discard client.peer.send(0.cuchar, packet)
+    pubChatQueue.flush()
 
 handlers[HChat] = proc(client: PClient; buffer: PBuffer) =
   var chat = readCsChat(buffer)
@@ -75,17 +91,7 @@ handlers[HLogin] = proc(client: PClient; buffer: PBuffer) =
   var resp = newScLogin(client.id, client.alias, "sessionkeylulz")
   client.send HLogin, resp
   client.sendMessage "welcome"
-  
-
-proc free(client: PClient) =
-  echo "client freed! id == 0 ? ", (client.id == 0)
-proc newClient(): PClient =
-  new(result, free)
-  result.id = clientID.next()
-  result.alias = "billy"
-  clients[result.id] = result
-proc `$`(client: PClient): string =
-  result = "(client #$1 $2)".format(client.id, client.alias)
+  dispMessage("Client logged in: ", client)
 
 when isMainModule:
   import parseopt, matchers, os, json
@@ -164,8 +170,23 @@ when isMainModule:
         myAssets.add pair
     
     echo "Zone has ", myAssets.len, " associated assets"
+    
+    dirServer = newServer()
+    
+    dirServer.addHandler HDsMsg, proc(serv: PServer; buffer: PBuffer) =
+      var m = readDsMsg(buffer)
+      dispMessage("<DirServer> ", m.msg)
+    dirServer.addHandler HZoneLogin, proc(serv: PServer; buffer: PBuffer) =
+      let loggedIn = readDsZoneLogin(buffer).status
+      if loggedIn:
+        #dirServerConnected = true
+    
+    if dirServerInfo.kind == JArray:
+      var error: string
+      if not dirServer.connect(dirServerInfo[0].str, dirServerInfo[1].num.int16, error):
+        dispError("<DirServer> "&error)
+    
   
-
   server = enet.createHost(address, 32, 2,  0,  0)
   if server == nil:
     quit "Could not create the server!"
@@ -174,13 +195,17 @@ when isMainModule:
   
   var 
     serverRunning = true
-  when true:
+  when appType == "gui":
     var frameRate = newClock()
     var pubChatDelay = newClock()
+  else:
+    var frameRate = epochTime()
+    var pubChatDelay = frameRate
   
   while serverRunning:
-    let dt = frameRate.restart.asMilliseconds().float / 1000.0
-    when true:
+    when appType == "gui":
+      let dt = frameRate.restart.asMilliseconds().float / 1000.0
+      
       for event in window.filterEvents():
         case event.kind
         of sfml.EvtClosed:
@@ -188,11 +213,16 @@ when isMainModule:
           serverRunning = false
         else:
           discard
+    else:
+      let dt = epochTime() - frameRate
+      frameRate = epochTime()
     
     while server.hostService(event, 10) > 0:
       case event.kind
       of EvtConnect:
         var client = newClient()
+        clients[client.id] = client
+
         event.peer.data = addr client.id
         client.peer = event.peer
         
@@ -224,33 +254,35 @@ when isMainModule:
           id = cast[ptr int32](event.peer.data)[]
           client = clients[id]
         if client.isNil:
-          dispmessage("CLIENT IS NIL!")
+          disperror("CLIENT IS NIL!")
           dispmessage(event.peer.data.isNil)
         else:
           dispMessage(clients[id], " disconnected")
           GCUnref(clients[id])
-          clientID.del id
+          #clientID.del id
           clients.del id
         
         event.peer.data = nil
       else:
         discard
     
-    fpsText.setString(ff(1.0/dt))
-    if pubChatDelay.getElapsedTime.asSeconds > 0.25:
-      pubChatDelay.restart()
-      if pubChatQueue.isDirty:
-        let packet = pubChatQueue.toPacket(FlagReliable)
-        for id, client in pairs(clients):
-          discard client.peer.send(0.cuchar, packet)
-        pubChatQueue.flush()
+    when appType == "gui":
+      fpsText.setString(ff(1.0/dt))
+      if pubChatDelay.getElapsedTime.asSeconds > 0.25:
+        pubChatDelay.restart()
+        flushPubChat()
+    else:
+      pubChatDelay -= dt
+      if frameRate - pubChatDelay > 0.25:
+        flushPubChat()
     
-    window.clear(Black)
-    window.draw(GUI)
-    window.draw chatbox
-    window.draw mousePos
-    window.draw fpstext
-    window.display()  
+    when appType == "gui":
+      window.clear(Black)
+      window.draw(GUI)
+      window.draw chatbox
+      window.draw mousePos
+      window.draw fpstext
+      window.display()  
 
   server.destroy()
   enetDeinit()

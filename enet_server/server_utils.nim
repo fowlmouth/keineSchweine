@@ -1,4 +1,5 @@
-import enet, sg_packets, estreams, md5, zlib_helpers, client_helpers
+import enet, sg_packets, estreams, md5, zlib_helpers, client_helpers, strutils,
+  idgen
 type
   PClient* = ref object
     id*: int32
@@ -10,6 +11,19 @@ type
     unpackedSize*: int
     sum*: MD5Digest
     compressed*: string
+var
+  clientID = newIdGen[int32]()
+
+proc free(client: PClient) =
+  if client.id != 0:
+    clientID.del client.id
+proc newClient*(): PClient =
+  new(result, free)
+  result.id = clientID.next()
+  result.alias = "billy"
+
+proc `$`*(client: PClient): string =
+  result = "$1:$2".format(client.id, client.alias)
 
 proc send*[T](client: PClient; pktType: char; pkt: var T) =
   var buf = newBuffer(128)

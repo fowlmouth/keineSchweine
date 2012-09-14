@@ -472,16 +472,18 @@ proc importAnim(data: PJsonNode, errors: var seq[string]): PAnimationRecord =
   result.delay = 1000.0
   result.spriteSheet = nil
   
-  checkKey(data, "anim")
-  if data["anim"].kind == JString:
-    result.spriteSheet = newSprite(data["anim"].str, errors)
-    return
-  let anim = data["anim"]
-  if anim.existsKey("file"): 
-    result.spriteSheet = newSprite(anim["file"].str, errors)
-  anim.getField("angle", result.angle) 
+  if data.existsKey("anim"):
+    let anim = data["anim"]
+    if anim.kind == JObject:
+      if anim.existsKey("file"):
+        result.spriteSheet = newSprite(anim["file"].str, errors)
+      
+      anim.getField "angle", result.angle
+      anim.getField "delay", result.delay
+    elif data["anim"].kind == JString:
+      result.spriteSheet = newSprite(anim.str, errors)
+  
   result.angle = radians(result.angle) ## comes in as degrees 
-  anim.getField("delay", result.delay) 
   result.delay /= 1000 ## delay comes in as milliseconds
 proc importSoul(data: PJsonNode): TSoulRecord =
   result.energy = 10000

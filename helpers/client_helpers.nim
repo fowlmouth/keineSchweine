@@ -16,7 +16,7 @@ proc addHandler*(serv: PServer; packetType: char; handler: TScPktHandler) =
   serv.handlers[packetType] = handler
 
 proc newServer*(): PServer =
-  result = cast[ptr TServer](alloc0(sizeof(TServer)))
+  result = cast[PServer](alloc0(sizeof(TServer)))
   result.connected = false
   result.host = createHost(nil, 1, 2, 0, 0)
   result.handlers = initTable[char, TScPktHandler](32)
