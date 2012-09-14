@@ -25,7 +25,7 @@ var
   loginBtn, playBtn: PButton
   fpsText = newText("", guiFont, 18)
   connectionButtons: seq[PButton]
-  downloadProgress: PButton
+  downloadProgress, connectButton: PButton
   u_alias, u_passwd: PTextEntry
   dirServer: PServer
   zone: PServer
@@ -61,10 +61,16 @@ proc dispMessage(args: varargs[string, `$`]) =
   chatbox.add(s)
 proc dispMessage(text: string) {.inline.} =
   chatbox.add(text)
+proc dispError(text: string) {.inline.} =
+  chatBox.add(newScChat(kind = CError, text = text))
 
 proc updateButtons() =
   let conn = dirServer.connected
   for b in connectionButtons: setEnabled(b, conn)
+  if conn:
+    connectButton.setString "Disconnect"
+  else:
+    connectButton.setString "Connect"
 
 proc poll(serv: PServer; timeout: cuint = 30) =
   if serv.isNil or serv.host.isNil: return
@@ -77,7 +83,7 @@ proc poll(serv: PServer; timeout: cuint = 30) =
         serv.handlePackets(buf)
         
         event.packet.destroy()
-      of EvtDisconnect:
+      of EvtDisconnect:        
         dispMessage "Disconnected"
         serv.connected = false
         event.peer.data = nil
@@ -100,15 +106,25 @@ proc tryLogin*(b: PButton) =
     passwd = u_passwd.getText())
   dirServer.send HLogin, login
 proc tryTransition*(b: PButton) =
-  #zone.writePkt HZoneJoinReq, mySession
+  #zone.writePkt HZoneJoinReq, myCreds
+proc tryConnect*(b: PButton) =
+  if not dirServer.connected:
+    var error: string
+    if not dirServer.connect(
+            clientSettings.dirServer.host, 
+            clientSettings.dirServer.port, 
+            error):
+      dispError(error)
+  else:
+    dirServer.peer.disconnect(1)
 
 proc playOffline*(b: PButton) =
   var errors: seq[string] = @[]
   if loadSettingsFromFile(clientSettings.offlineFile, errors):
     transition()
   else:
-    dispmessage("Errors reading the file ("& clientSettings.offlineFile &"):")
-    for e in errors: dispmessage(e)
+    dispMessage "Errors reading the file (", clientSettings.offlineFile, "):"
+    for e in errors: dispError(e)
 
 proc getClientSettings*(): TClientSettings =
   result = clientSettings
@@ -147,7 +163,11 @@ proc lobbyInit*() =
     startEnabled = false))
   pos.y += 20
   fpsText.setPosition pos
-  
+  pos.y += 20
+  connectButton = gui.newButton(
+    text = "Connect",
+    position = pos,
+    onClick = tryConnect)
   playBtn = gui.newButton(
     text = "Play",
     position = vec2f(680.0, 8.0),
@@ -157,10 +177,7 @@ proc lobbyInit*() =
     text = "Play Offline",
     position = vec2f(680.0, 28.0),
     onClick = playOffline)
-  discard """gui.newButton(
-    text = "Connect",
-    position = vec2f(10.0, 90.0),
-    onClick = tryConnect)"""
+  discard """"""
   connectionButtons.add(gui.newButton(
     text = "Test Chat",
     position = vec2f(10.0, 110.0),
@@ -177,9 +194,9 @@ proc lobbyInit*() =
   gui.newButton(text = "Flood msg area", position = vec2f(185, 30), onClick = proc(b: PButton) =
     for i in 0.. <30: 
       dispMessage($i))"""
-  dirServer = newServer(clientSettings.dirserver.host, clientSettings.dirServer.port)
-  dirServer.handlers[HChat] = handleChat
-  dirServer.handlers[HLogin] = handlePlayerLogin
+  dirServer = newServer() 
+  dirServer.addHandler(HChat, handleChat)
+  dirServer.addHandler(HLogin, handlePlayerLogin)
 
 proc lobbyReady*() = 
   kc.setActive()

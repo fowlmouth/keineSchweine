@@ -137,7 +137,9 @@
   "cost":410,
   "useSound":"PBombC.wav",
   "bullet":{
-   "anim":"bullets/GraziBombA_24x24.png",
+   "anim":{
+    "file":"bullets/GraziBombA_24x24.png",
+    "delay":40},
    "lifetime":1250,
    "inheritVelocity":750,
    "baseVelocity":420,
@@ -171,7 +173,7 @@
    "baseVelocity":0,
    "useSound":"mine3.wav",
    "physics":{
-    "mass":6.0,
+    "mass":12,
     "radius":10},
    "anim":{
     "file":"bullets/SkithzarMine_32x32.png",
