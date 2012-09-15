@@ -3,7 +3,7 @@ keineschweine
 server/dirserver
 server/sg_server
 server/nimcache
-genpacket/genpacket
+dependencies/genpacket/genpacket
 nakefile
 test
 
