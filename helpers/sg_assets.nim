@@ -213,7 +213,7 @@ template allAssets*(body: stmt) {.dirty.}=
     for file, asset in pairs(SoundCache):
       body
 
-template cacheImpl(procName, cacheName, resultType: expr; body: stmt) {.dirty.} =
+template cacheImpl(procName, cacheName, resultType: expr; body: stmt) {.dirty, immediate.} =
   proc procName*(filename: string; errors: var seq[string]): resulttype =
     if hasKey(cacheName, filename):
       return cacheName[filename]

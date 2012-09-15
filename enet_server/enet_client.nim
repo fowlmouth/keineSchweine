@@ -200,9 +200,9 @@ proc lobbyInit*() =
     for i in 0.. <30: 
       dispMessage($i))"""
   dirServer = newServer() 
-  dirServer.addHandler(HChat, handleChat)
-  dirServer.addHandler(HLogin, handlePlayerLogin)
-  dirServer.addHandler(HFileTransfer, client_helpers.handleFilePartRecv)
+  dirServer.addHandler HChat, handleChat
+  dirServer.addHandler HLogin, handlePlayerLogin
+  dirServer.addHandler HFileTransfer, client_helpers.handleFilePartRecv
   dirServer.addHandler HChallengeResult, client_helpers.handleFileChallengeResult
   dirServer.addHandler HFileChallenge, client_helpers.handleFileChallenge
 

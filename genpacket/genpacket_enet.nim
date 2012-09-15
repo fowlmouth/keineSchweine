@@ -1,4 +1,4 @@
-import macros, macro_dsl, streams, streams_enh, estreams
+import macros, macro_dsl, estreams
 from strutils import format
 
 template newLenName(): stmt {.immediate.} =
@@ -6,7 +6,7 @@ template newLenName(): stmt {.immediate.} =
   inc(lenNames)
 
 template defPacketImports*(): stmt {.immediate, dirty.} =
-  import macros, macro_dsl, streams, streams_enh
+  import macros, macro_dsl, estreams
   from strutils import format
 
 proc `$`*[T](x: seq[T]): string =
@@ -187,17 +187,9 @@ macro defPacket*(typeNameN: expr, typeFields: expr): stmt {.immediate.} =
   when defined(GenPacketShowOutput):
     echo(repr(result))
 
-proc `->`(a: string, b: string): PNimrodNode {.compileTime.} =
-  result = newNimNode(nnkIdentDefs).und(^a, ^b, newNimNode(nnkEmpty))
-proc `->`(a: string, b: PNimrodNode): PNimrodNode {.compileTime.} =
-  result = newNimNode(nnkIdentDefs).und(^a, b, newNimNode(nnkEmpty))
-proc `->`(a, b: PNimrodNode): PNimrodNode {.compileTime.} =
-  a[2] = b
-  result = a
-
-proc newProc*(name: string, params: varargs[PNimrodNode], resultType: PNimrodNode): PNimrodNode {.compileTime.} =
+proc newProc*(name: PNimrodNode; params: varargs[PNimrodNode]; resultType: PNimrodNode): PNimrodNode {.compileTime.} =
   result = newNimNode(nnkProcDef).und(
-    ^name,
+    name,
     emptyNode(),
     emptyNode(),
     newNimNode(nnkFormalParams).und(resultType),
@@ -205,9 +197,17 @@ proc newProc*(name: string, params: varargs[PNimrodNode], resultType: PNimrodNod
     emptyNode(),
     newNimNode(nnkStmtList))
   result[3].add(params)
+
 proc body*(procNode: PNimrodNode): PNimrodNode {.compileTime.} =
-  assert procNode.kind == nnkProcDef
+  assert procNode.kind == nnkProcDef and procNode[6].kind == nnkStmtList
   result = procNode[6]
+
+proc iddefs*(a, b: string; c: PNimrodNode): PNimrodNode {.compileTime.} =
+  result = newNimNode(nnkIdentDefs).und(^a, ^b, c)
+proc iddefs*(a: string; b: PNimrodNode): PNimrodNode {.compileTime.} =
+  result = newNimNode(nnkIdentDefs).und(^a, b, emptyNode())
+proc varTy*(a: PNimrodNode): PNimrodNode {.compileTime.} =
+  result = newNimNode(nnkVarTy).und(a)
 
 macro forwardPacket*(typeName: expr, underlyingType: typedesc): stmt {.immediate.} =
   var
@@ -215,19 +215,19 @@ macro forwardPacket*(typeName: expr, underlyingType: typedesc): stmt {.immediate
     streamID = ^"s"
   result = newNimNode(nnkStmtList).und(
     newProc(
-      "read"& $typeName.ident, 
-      [ "s" -> "PBuffer" -> newNimNode(nnkNilLit) ],
+      (^("read"& $typeName.ident)).postfix("*"), 
+      [ iddefs("s", "PBuffer", newNimNode(nnkNilLit)) ],
       typeName),
     newProc(
-      "pack",
-      [ "s" -> "PBuffer" -> newNimNode(nnkNilLit),
-        "p" -> newNimNode(nnkVarTy).und(typeName) ],
+      (^"pack").postfix("*"),
+      [ iddefs("s", "PBuffer", newNimNode(nnkNilLit)),
+        iddefs("p", varTy(typeName)) ],
       emptyNode()))
   var
-    readBody = result[0].body()
-    packBody = result[1].body()
+    readBody = result[0][6]
+    packBody = result[1][6]
     resName = ^"result"
-  echo(treerepr(underlyingType))
+  
   case underlyingType.kind
   of nnkBracketExpr:
     case $underlyingType[0].ident
@@ -236,7 +236,7 @@ macro forwardPacket*(typeName: expr, underlyingType: typedesc): stmt {.immediate
         readBody.add(
           newCall("read", ^"s", resName[lit(i)]))
         packBody.add(
-          newCall("write", ^"s", packetID[lit(i)]))
+          newCall("writeBE", ^"s", packetID[lit(i)]))
     else:
       echo "Unknown type: ", repr(underlyingtype)
   else:

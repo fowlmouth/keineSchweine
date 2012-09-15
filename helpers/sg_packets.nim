@@ -1,4 +1,4 @@
-import genpacket_enet, sockets, md5, enet, estreams
+import genpacket_enet, sockets, md5, enet
 defPacketImports()
 
 type
@@ -60,13 +60,19 @@ forwardPacketT(SpawnKind, int8)
 defPacket(ScSpawn, tuple[
   kind: SpawnKind; id: uint16; record: uint16; amount: uint16])
 
+
+
+
 type TAssetType* = enum
   FZoneCfg = 1'i8, FGraphics, FSound 
+
 forwardPacketT(TAssetType, int8)
 forwardPacket(MD5Digest, array[0..15, int8])
-idPacket(FileChallenge, 'F', 
+
+idPacket(FileChallenge, 'F',
   tuple[file: string; assetType: TAssetType; fullLen: int32],
-  tuple[needfile: bool, checksum: MD5Digest])
+  tuple[needFile: bool; checksum: MD5Digest])
+
 
 let HChallengeResult* = '('
 defPacket(ScChallengeResult, tuple[status: bool])
@@ -83,3 +89,18 @@ let HDsMsg* = 'c'
 defPacket(DsMsg, tuple[msg: string])
 let HVerifyClient* = 'v'
 defPacket(SdVerifyClient, tuple[session: ScLogin])
+
+when isMainModule:
+  
+  var buf = newBuffer(100)
+  var m = toMd5("hello there")
+  echo(repr(m))
+  buf.pack m
+
+  echo(repr(buf.data))
+  echo(len(buf.data))
+  
+  buf.reset()
+
+  var x = buf.readMD5Digest()
+  echo(repr(x))

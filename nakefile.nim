@@ -10,6 +10,10 @@ const
   ReleaseDefines = "-d:release --deadCodeElim:on"
   ReleaseTestDefines = "-d:debugWeps -d:debugKeys --forceBuild"
 
+task "testprofile", "..":
+  if shell("nimrod", TestBuildDefines, "--profiler:on", "--stacktrace:on", "compile", ExeName) == 0:
+    shell "."/ExeName, "offline"
+
 task "test", "Build with test defines":
   if shell("nimrod", TestBuildDefines, "compile", ExeName) != 0:
     quit "The build failed."
@@ -67,6 +71,7 @@ task "testskel", "create skeleton test dir for testing":
   copyFile ExeName, "test"/ExeName
   withDir "test":
     shell "."/ExeName
+
 
 task "clean", "cleanup generated files":
   var dirs = @["nimcache", "server"/"nimcache"]

@@ -31,10 +31,13 @@ proc newBuffer*(pkt: PPacket): PBuffer =
 proc toPacket*(buffer: PBuffer; flags: TPacketFlag): PPacket =
   buffer.data.setLen buffer.pos
   result = createPacket(cstring(buffer.data), buffer.pos, flags)
+
 proc isDirty*(buffer: PBuffer): bool {.inline.} =
   result = (buffer.pos != 0)
 proc atEnd*(buffer: PBuffer): bool {.inline.} =
   result = (buffer.pos == buffer.data.len)
+proc reset*(buffer: PBuffer) {.inline.} =
+  buffer.pos = 0
 
 proc flush*(buf: PBuffer) =
   buf.pos = 0

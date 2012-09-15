@@ -73,8 +73,10 @@ proc handleFilePartRecv*(serv: PServer; buffer: PBuffer) =
     f = readScFileTransfer(buffer)
   updateFileProgress()
   if not(f.pos == currentFileTransfer.pos): 
+    echo "returning early from filepartrecv"
     return ##issues, probably
   if currentFileTransfer.data.len == 0:
+    echo "setting current file size"
     currentFileTransfer.data.setLen f.fileSize
   let len = f.data.len
   copymem(
@@ -89,9 +91,11 @@ proc handleFilePartRecv*(serv: PServer; buffer: PBuffer) =
     var resp: CsFileChallenge
     resp.checksum = toMD5(currentFileTransfer.data)
     serv.send HFileChallenge, resp
+    echo "responded with challenge (ready to save)"
   else:
     var resp = newCsFilepartAck(currentFileTransfer.pos)
     serv.send HFileTransfer, resp
+    echo "responded for next part"
 
 proc saveCurrentFile() =
   if not currentFileTransfer.readyToSave: return
@@ -107,8 +111,14 @@ proc saveCurrentFile() =
 ## HChallengeResult
 proc handleFileChallengeResult*(serv: PServer; buffer: PBuffer) =
   var res = readScChallengeResult(buffer).status
+  echo "got challnege result: ", res
   if res and currentFileTransfer.readyToSave:
+    echo "saving"
     saveCurrentFile()
+  else:
+    currentFileTransfer.readyToSave = false
+    currentFileTransfer.pos = 0
+    echo "REsetting current file"
 
 ## HFileCHallenge
 proc handleFileChallenge*(serv: PServer; buffer: PBuffer) =
@@ -118,8 +128,10 @@ proc handleFileChallenge*(serv: PServer; buffer: PBuffer) =
     resp: CsFileChallenge
   if not existsFile(path):
     resp.needFile = true
+    echo "Got file challenge, need file."
   else:
     resp.checksum = toMD5(readFile(path))
+    echo "got file challenge, sending sum"
   currentFileTransfer.fileName = challenge.file
   currentFileTransfer.assetType = challenge.assetType
   currentFileTransfer.fullLen = challenge.fullLen.int

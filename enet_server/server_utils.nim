@@ -1,5 +1,5 @@
 import enet, sg_packets, estreams, md5, zlib_helpers, client_helpers, strutils,
-  idgen, sg_assets, tables
+  idgen, sg_assets, tables, os
 type
   PClient* = ref object
     id*: int32
@@ -88,6 +88,7 @@ proc startSend*(challenge: PFileChallengeSequence, client: PClient) =
 
 ## HFileTransfer
 proc handleFilePartAck*(client: PClient; buffer: PBuffer) =
+  echo "got filepartack"
   var 
     ftrans = readCsFilepartAck(buffer)
     fcSeq = fileChallenges[client.id]
@@ -96,21 +97,23 @@ proc handleFilePartAck*(client: PClient; buffer: PBuffer) =
 
 ## HFileCHallenge
 proc handleFileChallengeResp*(client: PClient; buffer: PBuffer) =
+  echo "got file challenge resp"
   var 
     fcResp = readCsFileChallenge(buffer)
     fcSeq = fileChallenges[client.id]
+  let index = $(fcSeq.index + 1) / $(myAssets.len)
   if fcResp.needFile:
-    client.sendMessage "Sending file..."
+    client.sendMessage "Sending file... "&index
     fcSeq.startSend(client)
   else:
     var resp = newScChallengeResult(false)
     if fcResp.checksum == fcSeq.file.file.sum: ##client is good
-      #client.sendMessage "Checksum is good. ("& $(fcSeq.index+1) &'/'& $(myAssets.len) &')'
+      client.sendMessage "Checksum is good. "&index
       resp.status = true
       client.send HChallengeResult, resp
       fcSeq.next(client)
     else:
-      #client.sendMessage "Checksum is bad, sending file..."
+      client.sendMessage "Checksum is bad, sending file... "&index
       client.send HChallengeResult, resp
       fcSeq.startSend(client)
 

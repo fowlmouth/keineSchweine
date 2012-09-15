@@ -141,13 +141,13 @@ when isMainModule:
       echo(path)
       quit(1)
     
-    block:
+    discard """block:
       var 
         TestFile: FileChallengePair
         contents = repeatStr(2, "abcdefghijklmnopqrstuvwxyz")
       testFile.challenge = newScFileChallenge("foobar.test", FZoneCfg, contents.len.int32) 
       testFile.file = checksumStr(contents)
-      myAssets.add testFile
+      myAssets.add testFile"""
     
     setCurrentDir getAppDir().parentDir()
     let zonesettings = readFile(path)
