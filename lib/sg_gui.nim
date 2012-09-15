@@ -1,5 +1,5 @@
 import
-  sfml, sfml_vector, sfml_colors, 
+  sfml, sfml_colors, 
   input_helpers, sg_packets
 from strutils import countlines
 {.deadCodeElim: on.}

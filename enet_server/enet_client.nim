@@ -1,5 +1,5 @@
 import enet, strutils,
-  sfml, sfml_vector, sfml_colors, sg_gui, input_helpers,
+  sfml, sfml_colors, sg_gui, input_helpers,
   math_helpers, sg_packets, estreams, tables,
   json, sg_assets, client_helpers
 if enetInit() != 0:

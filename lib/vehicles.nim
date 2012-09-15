@@ -1,5 +1,5 @@
 import
-  sfml, sfml_vector, chipmunk, 
+  sfml, chipmunk, 
   sg_assets, sfml_stuff
 type
   PVehicle* = ref TVehicle

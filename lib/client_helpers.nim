@@ -1,5 +1,5 @@
 import  
-  tables, sg_packets, enet, estreams, sg_gui, sfml, sfml_vector,
+  tables, sg_packets, enet, estreams, sg_gui, sfml,
   zlib_helpers, md5, sg_assets, os
 type
   PServer* = ptr TServer
@@ -50,6 +50,7 @@ proc send*[T](serv: PServer; packetType: char; pkt: var T) =
     b.write packetType
     b.pack pkt
     serv.peer.send(0.cuchar, b, FlagUnsequenced)
+
 proc sendPubChat*(server: PServer; msg: string) =
   var chat = newCsChat("", msg)
   server.send HChat, chat

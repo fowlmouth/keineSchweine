@@ -1,5 +1,5 @@
 import
-  sfml, sfml_vector, tables, hashes
+  sfml, tables, hashes
 type
   TKeyEventKind* = enum down, up
   TInputFinishedProc* = proc() 

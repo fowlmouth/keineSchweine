@@ -1,7 +1,7 @@
 import enet, strutils, idgen, tables, math_helpers, 
   estreams, sg_packets, server_utils, sg_assets, client_helpers
 when appType == "gui":
-  import sfml, sfml_colors, sfml_vector, sg_gui,
+  import sfml, sfml_colors, sg_gui,
     input_helpers, sfml_stuff
 else:
   import times
@@ -223,7 +223,7 @@ when isMainModule:
         else:
           discard
     else:
-      let dt = epochTime() - frameRate
+      let dt = epochTime() - frameRate ##is this right? probably not
       frameRate = epochTime()
     
     while server.hostService(event, 10) > 0:
@@ -266,7 +266,6 @@ when isMainModule:
         else:
           dispMessage(clients[id], " disconnected")
           GCUnref(clients[id])
-          #clientID.del id
           clients.del id
         
         event.peer.data = nil

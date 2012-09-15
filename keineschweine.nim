@@ -1,6 +1,6 @@
 import 
   os, math, strutils, gl, tables,
-  sfml, sfml_vector, sfml_audio, sfml_colors, chipmunk, math_helpers,
+  sfml, sfml_audio, sfml_colors, chipmunk, math_helpers,
   input_helpers, animations, vehicles, game_objects, sfml_stuff, map_filter,
   sg_gui, sg_assets, sound_buffer, enet_client
 when defined(profiler):

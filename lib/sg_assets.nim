@@ -10,7 +10,7 @@ when defined(NoSFML):
     result.x = x
     result.y = y
 else:
-  import sfml, sfml_vector, sfml_audio, sfml_stuff
+  import sfml, sfml_audio, sfml_stuff
 when not defined(NoChipmunk):
   import chipmunk
 

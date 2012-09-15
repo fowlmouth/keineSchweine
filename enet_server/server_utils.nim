@@ -21,6 +21,7 @@ const FileChunkSize = 256
 
 proc free(client: PClient) =
   if client.id != 0:
+    fileChallenges.del client.id
     clientID.del client.id
 proc newClient*(): PClient =
   new(result, free)

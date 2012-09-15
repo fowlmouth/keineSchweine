@@ -1,7 +1,6 @@
 import 
   math, strutils,
-  sfml, sfml_vector,
-  input_helpers
+  sfml, input_helpers
 when not defined(NoChipmunk):
   import chipmunk
   proc floor*(a: TVector): TVector2f {.inline.} =
