@@ -1,5 +1,8 @@
 import nake
+import httpclient, zipfiles, times, math
 nakeImports
+
+randomize()
 
 const 
   GameAssets = "http://dl.dropbox.com/u/37533467/data-08-01-2012.7z"
@@ -60,16 +63,14 @@ task "release", "release build":
     ## zip up all the files and such or something useful here 
 
 task "testskel", "create skeleton test dir for testing":
-  if not existsDir("test"):
-    createDir("test")
-  if not existsDir("test/data/fnt"):
-    createDir("test/data/fnt")
-  if not existsFile("test/data/fnt/LiberationMono-Regular.ttf"):
-    copyFile "data/fnt/LiberationMono-Regular", "test/data/fnt/LiberationMono-Regular.ttf"
-  copyFile "client_settings.json", "test/client_settings.json"
+  let dirname = "test-"& $random(5000)
+  removeDir dirName
+  createDir dirName/"data/fnt"
+  copyFile "data/fnt/LiberationMono-Regular", dirName/"data/fnt/LiberationMono-Regular.ttf"
+  copyFile "client_settings.json", dirName/"client_settings.json"
   runTask "test"
-  copyFile ExeName, "test"/ExeName
-  withDir "test":
+  copyFile ExeName, dirName/ExeName
+  withDir dirName:
     shell "."/ExeName
 
 
@@ -78,8 +79,6 @@ task "clean", "cleanup generated files":
   dirs.each(proc(x: var string) =
     if existsDir(x): removeDir(x))
 
-import httpclient, zipfiles, times, math
-randomize()
 task "download", "download game assets":
   var
     skipAssets = false

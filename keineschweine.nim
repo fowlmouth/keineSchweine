@@ -1,7 +1,7 @@
 import 
   os, math, strutils, gl, tables,
   sfml, sfml_audio, sfml_colors, chipmunk, math_helpers,
-  input_helpers, animations, vehicles, game_objects, sfml_stuff, map_filter,
+  input_helpers, animations, game_objects, sfml_stuff, map_filter,
   sg_gui, sg_assets, sound_buffer, enet_client
 when defined(profiler):
   import nimprof
@@ -15,18 +15,32 @@ type
     alias: string
     nameTag: PText
     items: seq[PItem]
+  PVehicle* = ref TVehicle
+  TVehicle* = object
+    body*:      chipmunk.PBody
+    shape*:     chipmunk.PShape
+    record*:   PVehicleRecord
+    sprite*:   PSprite
+    spriteRect*: TIntRect
+    occupant: PPlayer
+    when false:
+      position*: TVector2f
+      velocity*: TVector2f
+      angle*:    float
   PItem* = ref object
     record: PItemRecord
     cooldown: float 
   PLiveBullet* = ref TLiveBullet ##represents a live bullet in the arena
   TLiveBullet* = object
     lifetime*: float
+    dead: bool
     anim*: PAnimation
     record*: PBulletRecord
     fromPlayer*: PPlayer
     trailDelay*: float
     body: chipmunk.PBody
     shape: chipmunk.PShape
+import vehicles
 const
   LGrabbable*  = (1 shl 0).TLayers
   LBorders*    = (1 shl 1).TLayers
@@ -34,7 +48,8 @@ const
   LEnemy*      = ((1 shl 4) and LBorders.int).TLayers
   LEnemyFire*  = (LPlayer).TLayers
   LPlayerFire* = (LEnemy).TLayers
-  
+  CTBullet = 1.TCollisionType
+  CTVehicle= 2.TCollisionType
   ##temporary constants
   W_LIMIT = 2.3
   V_LIMIT = 35
@@ -125,12 +140,28 @@ when defined(showFPS):
 proc mouseToSpace*(): TVector =
   result = window.convertCoords(vec2i(getMousePos()), worldView).sfml2cp()
 
+proc explode*(b: PLiveBullet)
+## TCollisionBeginFunc
+proc collisionBulletPlayer(arb: PArbiter; space: PSpace; 
+                            data: pointer): Bool{.cdecl.} =
+  var 
+    bullet = cast[PLiveBullet](arb.a.data)
+    target = cast[PVehicle](arb.b.data)
+  if target.occupant.isNil or target.occupant == bullet.fromPlayer: return
+  bullet.explode()
+
 proc angularDampingSim(body: PBody, gravity: TVector, damping, dt: CpFloat){.cdecl.} =
   body.w -= (body.w * 0.98 * dt) 
   body.updateVelocity(gravity, damping, dt)
 
 proc initLevel() =
   loadAllAssets()
+  
+  if not space.isNil: space.destroy()
+  space = newSpace()
+  space.addCollisionHandler CTBullet, CTVehicle, collisionBulletPlayer,
+    nil, nil, nil, nil
+  
   let levelSettings = getLevelSettings()
   levelArea.width = levelSettings.size.x
   levelArea.height= levelSettings.size.y
@@ -187,6 +218,8 @@ template newExplosion(obj, animation, angle): stmt =
   explosions.add(newAnimation(animation, AnimOnce, obj.body.getPos.cp2sfml, angle))
 
 proc explode*(b: PLiveBullet) =
+  if b.dead: return
+  b.dead = true
   space.removeShape b.shape
   space.removeBody b.body
   if not b.record.explosion.anim.isNil:
@@ -217,6 +250,8 @@ proc newBullet*(record: PBulletRecord; fromPlayer: PPlayer): PLiveBullet =
     result.shape.setLayers(LPlayerFire)
   else:
     result.shape.setLayers(LEnemyFire)
+  result.shape.setCollisionType CTBullet
+  result.shape.setUserData(cast[ptr TLiveBullet](result))
   let 
     fireAngle = fromPlayer.vehicle.body.getAngle()
     fireAngleV = vectorForAngle(fireAngle)
@@ -226,6 +261,7 @@ proc newBullet*(record: PBulletRecord; fromPlayer: PPlayer): PLiveBullet =
   result.body.setVel((fromPlayer.vehicle.body.getVel() * record.inheritVelocity) + (fireAngleV * record.baseVelocity))
 
 proc update*(b: PLiveBullet; dt: float): bool =
+  if b.dead: return true
   b.lifetime -= dt
   b.anim.next(dt)
   #b.anim.sprite.setPosition(b.body.getPos.floor())
@@ -258,9 +294,6 @@ proc free*(veh: PVehicle) =
 
 
 proc newVehicle*(record: PVehicleRecord): PVehicle =
-  if not record.playable:
-    echo(record.name &" is not playable")
-    return nil
   echo("Creating "& record.name)
   new(result, free)
   result.record = record
@@ -270,6 +303,8 @@ proc newVehicle*(record: PVehicleRecord): PVehicle =
   result.body.setAngVelLimit W_LIMIT
   result.body.setVelLimit result.record.handling.topSpeed
   result.body.velocityFunc = angularDampingSim
+  result.shape.setCollisionType CTVehicle
+  result.shape.setUserData(cast[ptr TVehicle](result))
 proc newVehicle*(name: string): PVehicle =
   result = newVehicle(fetchVeh(name))
 
@@ -311,12 +346,24 @@ proc draw(window: PRenderWindow, player: PPlayer) {.inline.} =
       window.draw(player.vehicle.sprite)
     window.draw(player.nameTag)
 
+proc setVehicle(p: PPlayer; v: PVehicle) = 
+  p.vehicle = v  #sorry mom, this is just how things worked out ;(
+  if not v.isNil: 
+    v.occupant = p
 
 proc createBot() =
   if localBots.len < MaxLocalBots:
     var bot = newPlayer("Dodo Brown")
-    bot.vehicle = newVehicle("Masta")
+    bot.setVehicle(newVehicle("Turret0"))
+    if bot.isNil:
+      echo "BOT IS NIL"
+      return
+    elif bot.vehicle.isNil:
+      echo "BOT VEH IS NIL"
+      return
     localBots.add(bot)
+    bot.vehicle.body.setPos(vector(100, 100))
+    echo "new bot at ", $bot.vehicle.body.getPos()
 
 var inputCursor = newVertexArray(sfml.Lines, 2)
 inputCursor[0].position = vec2f(10.0, 10.0)
@@ -327,9 +374,10 @@ proc hasVehicle(p: PPlayer): bool {.inline.} =
 
 proc setMyVehicle(v: PVehicle) {.inline.} =
   activeVehicle = v
-  localPlayer.vehicle = v
+  localPlayer.setVehicle v
+
 proc unspec() =
-  var veh = newVehicle("Masta")
+  var veh = newVehicle("Turret0")
   if not veh.isNil:
     setMyVehicle veh
     localPlayer.spectator = false
@@ -411,6 +459,10 @@ when defined(recordMode):
         snapshots[i].destroy()
       snapshots.setLen 0)
 when defined(DebugKeys):
+  ingameClient.registerHandler MouseRight, down, proc() = 
+    echo($activevehicle.body.getAngle.vectorForAngle())
+  ingameClient.registerHandler KeyBackslash, down, proc() = 
+    createBot()
   ingameClient.registerHandler(KeyNum1, down, proc() =
     if localPlayer.items.len == 0:
       localPlayer.addItem("Mass Driver")
@@ -551,9 +603,9 @@ proc mainUpdate(dt: float) =
       pos = localPlayer.vehicle.body.getPos()
       ang = localPlayer.vehicle.body.getAngle.vectorForAngle()
     myPosition[0].x = pos.x
-    myPosition[0].y = pos.y
+    myPosition[0].z = pos.y
     myPosition[1].x = ang.x
-    myPosition[1].y = ang.y
+    myPosition[1].z = ang.y
     listenerSetPosition(myPosition[0])
     listenerSetDirection(myPosition[1])
   

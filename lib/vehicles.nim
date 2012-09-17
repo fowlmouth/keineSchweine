@@ -1,18 +1,6 @@
 import
   sfml, chipmunk, 
-  sg_assets, sfml_stuff
-type
-  PVehicle* = ref TVehicle
-  TVehicle* = object
-    body*:      chipmunk.PBody
-    shape*:     chipmunk.PShape
-    record*:   PVehicleRecord
-    sprite*:   PSprite
-    spriteRect*: TIntRect
-    when false:
-      position*: TVector2f
-      velocity*: TVector2f
-      angle*:    float
+  sg_assets, sfml_stuff, keineschweine
 
 
 proc accel*(obj: PVehicle, dt: float) =

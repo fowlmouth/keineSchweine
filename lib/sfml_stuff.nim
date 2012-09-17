@@ -19,9 +19,10 @@ proc vec2f*(a: TVector2i): TVector2f =
 proc vec2i*(a: TVector2f): TVector2i =
   result.x = a.x.cint
   result.y = a.y.cint
-proc vec3f*(x, y: float): TVector3f =
+proc vec3f*(x, y, z: float): TVector3f =
   result.x = x.cfloat
   result.y = y.cfloat
+  result.z = z.cfloat
 
 proc `$`*(a: var TIntRect): string =
   result = "[TIntRect $1,$2 $3x$4]".format($a.left, $a.top, $a.width, $a.height)

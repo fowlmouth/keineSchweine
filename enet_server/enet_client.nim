@@ -10,7 +10,6 @@ type
     offlineFile: string
     dirserver: tuple[host: string, port: int16]
     website*: string
-  
 var
   clientSettings: TClientSettings
   event: enet.TEvent

@@ -19,7 +19,7 @@ proc playSound*(sound: PSoundRecord, pos: TVector) =
     s.setMinDistance MinDistance
   else:
     s = deadSounds.pop()
-  s.setPosition(vec3f(pos.x, pos.y))
+  s.setPosition(vec3f(pos.x, 0, pos.y))
   s.setBuffer(sound.soundBuf)
   s.play()
   liveSounds.add s

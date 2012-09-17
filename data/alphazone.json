@@ -23,29 +23,21 @@
    "delay":75,
    "offs":[[-30, 0]]}}],
  ["Turret0",{
-  "img":"ships/turrets/turret0_61x61.png",
-  "size":[   61,   61],
-  "armor":100,
-  "energy":1700,
-  "scale":1.0,
-  "radius":20,
-  "rotation_points":64,
-  "slots":[   {
-    "type":"weapon",
-    "offs":[     18,     0]
-   }]}],
+  "anim":{
+   "file":"ships/turrets/turret0_61x61.png",
+   "angle":90},
+  "physics":{
+   "radius":20}}],
  ["Defensive Satellite",{
-  "anim":"ships/turrets/DefSat_54x54.png",
-  "armor":75,
-  "energy":1700,
+  "anim":{
+   "file":"ships/turrets/DefSat_54x54.png",
+   "angle":90},
+  "soul":{
+   "armor":75,
+   "energy":1700},
   "physics":{
    "mass":20,
-   "radius":20},
-  "slots":[   {
-    "type":"weapon",
-    "offs":[     70,     0]
-   }],
-  "weapons":[   "small_laser"]}],
+   "radius":20}}],
  ["Base0",{
   "anim":"ships/turrets/repairStationV0_128x128.png",
   "playable":false,
