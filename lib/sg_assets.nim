@@ -10,7 +10,7 @@ when defined(NoSFML):
     result.x = x
     result.y = y
 else:
-  import csfml, csfml_audio, csfml_stuff
+  import csfml, csfml_audio, sfml_stuff
 when not defined(NoChipmunk):
   import chipmunk
 
@@ -272,7 +272,7 @@ else:
   proc load*(ss: PSpriteSheet): bool =
     if not ss.sprite.isNil: 
       return
-    var image = sfml.newImage("data/gfx/"/ss.file)
+    var image = csfml.newImage("data/gfx/"/ss.file)
     if image == nil:
       echo "Image could not be loaded"
       return
