@@ -1,6 +1,6 @@
 when defined(NoSFML) or defined(NoChipmunk):
   {.error.}
-import sfml_audio, sfml_stuff, sg_assets, chipmunk
+import csfml_audio, csfml_stuff, sg_assets, chipmunk
 const
   MinDistance* = 350.0
   Attenuation* = 20.0
@@ -9,7 +9,9 @@ var
   deadSounds: seq[PSound] = @[]
 
 proc playSound*(sound: PSoundRecord, pos: TVector) =
-  if sound.isNil or sound.soundBuf.isNil: return
+  if sound.isNil or 
+    sound.soundBuf.isNil: 
+    return
   var s: PSound
   if deadSounds.len == 0:
     s = sfml_audio.newSound()

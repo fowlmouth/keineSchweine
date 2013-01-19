@@ -209,7 +209,7 @@ proc iddefs*(a: string; b: PNimrodNode): PNimrodNode {.compileTime.} =
 proc varTy*(a: PNimrodNode): PNimrodNode {.compileTime.} =
   result = newNimNode(nnkVarTy).und(a)
 
-macro forwardPacket*(typeName: expr, underlyingType: typedesc): stmt {.immediate.} =
+macro forwardPacket*(typeName: expr, underlyingType: expr): stmt {.immediate.} =
   var
     packetID = ^"p"
     streamID = ^"s"
@@ -228,7 +228,7 @@ macro forwardPacket*(typeName: expr, underlyingType: typedesc): stmt {.immediate
     packBody = result[1][6]
     resName = ^"result"
   
-  case underlyingType.kind
+  case underlyingType.kind()
   of nnkBracketExpr:
     case $underlyingType[0].ident
     of "array":
@@ -258,39 +258,30 @@ when isMainModule:
     SomeEnum = enum
       A = 0'i8,
       B, C
-  forwardPacket(SomeEnum, int8)
+  forwardPacketT(SomeEnum, int8)
   
+  type Foo = array[0..4, int8]
+  forwardPacket(Foo, array[0..4, int8])
+  var f: Foo = [4'i8, 3'i8, 2'i8, 1'i8, 0'i8]
+  var s2 = newBuffer()
+  s2.pack f
   
-  defPacket(Foo, tuple[x: array[0..4, int8]])
-  var f = newFoo([4'i8, 3'i8, 2'i8, 1'i8, 0'i8])
-  var s2 = newStringStream("")
-  f.pack(s2)
-  assert s2.data == "\4\3\2\1\0"
+  template dumps2() =
+    echo("s2 data: ", repr(s2.data))
   
-  var s = newStringStream()
-  s.flushImpl = proc(s: PStream) =
-    var z = PStringStream(s)
-    z.setPosition(0)
-    z.data.setLen(0)
+  echo(repr(s2.data), " ", s2.data == cstring("\4\3\2\1"))
   
-  
-  s.setPosition(0)
-  s.data.setLen(0)
-  var o = B
-  o.pack(s)
-  o = A
-  o.pack(s)
-  o = C
-  o.pack(s)
-  assert s.data == "\1\0\2"
-  s.flush
-  
+  s2 = newBuffer(100)
   defPacket(Y, tuple[z: int8])
-  proc `$`(z: Y): string = result = "Y("& $z.z &")"
+  
   defPacket(TestPkt, tuple[x: seq[Y]])
-  var test = newTestPkt()
-  test.x.add([newY(5), newY(4), newY(3), newY(2), newY(1)])
+  var test = newTestPkt(@[newY(5), newY(4), newY(3), newY(2), newY(1)])
   for itm in test.x:
     echo(itm)
-  test.pack(s)
-  echo(repr(s.data))
+  s2.pack test
+  dumps2
+  s2.write(40.int32)
+  dumps2
+  s2.pack f
+  dumps2
+  

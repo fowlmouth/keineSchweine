@@ -9,7 +9,7 @@ const
   BinLibs = "http://dl.dropbox.com/u/37533467/libs-2012-09-12.zip"
   ExeName = "keineschweine"
   ServerDefines = "-d:NoSFML -d:NoChipmunk"
-  TestBuildDefines = "-d:escapeMenuTest -d:debugWeps -d:showFPS -d:moreNimrod -d:debugKeys -d:foo -d:recordMode --forceBuild"
+  TestBuildDefines = "-d:genpacketShowOutput -d:escapeMenuTest -d:debugWeps -d:showFPS -d:moreNimrod -d:debugKeys -d:foo -d:recordMode --forceBuild"
   ReleaseDefines = "-d:release --deadCodeElim:on"
   ReleaseTestDefines = "-d:debugWeps -d:debugKeys --forceBuild"
 
@@ -23,7 +23,7 @@ task "test", "Build with test defines":
 
 task "testrun", "Build with test defines and run":
   runTask "test"
-  shell "."/ExeName
+  shell "."/ExeName, "offline"
 
 task "test2", "Build release test build test release build":
   if shell("nimrod", ReleaseDefines, ReleaseTestDefines, "compile", ExeName) == 0:

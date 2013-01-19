@@ -1,6 +1,6 @@
 import 
   math, strutils,
-  sfml, input_helpers
+  csfml, input_helpers
 when not defined(NoChipmunk):
   import chipmunk
   proc floor*(a: TVector): TVector2f {.inline.} =
@@ -12,6 +12,7 @@ when not defined(NoChipmunk):
   proc cp2sfml*(a: TVector): TVector2f {.inline.} =
     result.x = a.x
     result.y = a.y
+  proc vec2f*(a: TVector): TVector2f {.inline.} = return cp2sfml(a)
 
 proc vec2f*(a: TVector2i): TVector2f =
   result.x = a.x.cfloat

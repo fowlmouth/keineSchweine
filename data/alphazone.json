@@ -92,6 +92,7 @@
    "anim":{
     "file":"explosions/laserHit2_64x64.png",
     "delay":15},
+   "effect":["gravity", 128, 800],
    "sound":"ebomb3.wav"}
   }],
  ["beam", {

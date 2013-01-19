@@ -10,7 +10,7 @@ when defined(NoSFML):
     result.x = x
     result.y = y
 else:
-  import sfml, sfml_audio, sfml_stuff
+  import csfml, csfml_audio, csfml_stuff
 when not defined(NoChipmunk):
   import chipmunk
 
@@ -85,6 +85,17 @@ type
   TExplosionRecord* = object
     anim*: PAnimationRecord
     sound*: PSoundRecord 
+    effect*: PExplosionEffect
+  
+  TExplosionEffectKind* = enum
+    ExplNone, ExplGravity, ExplRepel
+  PExplosionEffect* = ref TExplosionEffect
+  TExplosionEffect* = object
+    case kind*: TExplosionEffectKind
+    of ExplGravity, ExplRepel:
+      radius*, force*: int
+    else: nil
+  
   PAnimationRecord* = ref TAnimationRecord
   TAnimationRecord* = object
     spriteSheet*: PSpriteSheet
@@ -509,11 +520,39 @@ proc importSoul(data: PJsonNode): TSoulRecord =
   let soul = data["soul"]
   soul.getField("energy", result.energy)
   soul.getField("health", result.health)
+
+var nnn = 0
+proc importExplosionEffect(data: PJsonNode; errors: var seq[string]; 
+      key: string): PExplosionEffect =
+  new(result)
+  inc nnn
+  echo "new explosion effect ", nnn
+  if not data.existsKey(key):
+    result.kind = ExplNone
+    echo"none"
+    return
+  let eff = data[key]
+  case eff[0].str.tolower
+  of "repel":
+    result.kind = ExplRepel
+    result.radius = eff[1].num.int
+    result.force = -eff[2].num.int
+    echo"repel"
+  of "gravity":
+    result.kind = ExplGravity
+    result.radius = eff[1].num.int
+    result.force = eff[2].num.int
+    echo"gravity"
+  else:
+    result.kind = ExplNone
+    echo"none"
+  
 proc importExplosion(data: PJsonNode; errors: var seq[string]): TExplosionRecord =
   checkKey(data, "explode")
   let expl = data["explode"]
   result.anim = importAnim(expl, errors)
   result.sound = importSound(expl, errors, "sound")
+  result.effect = importExplosionEffect(expl, errors, "effect")
 proc importSound*(data: PJsonNode; errors: var seq[string]; fieldName: string = nil): PSoundRecord =
   if data.kind == JObject:
     checkKey(data, fieldName)

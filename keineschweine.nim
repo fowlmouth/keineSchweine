@@ -1,6 +1,6 @@
 import 
   os, math, strutils, gl, tables,
-  sfml, sfml_audio, sfml_colors, chipmunk, math_helpers,
+  csfml, csfml_audio, csfml_colors, chipmunk, math_helpers,
   input_helpers, animations, game_objects, sfml_stuff, map_filter,
   sg_gui, sg_assets, sound_buffer, enet_client
 when defined(profiler):
@@ -40,6 +40,14 @@ type
     trailDelay*: float
     body: chipmunk.PBody
     shape: chipmunk.PShape
+  
+  PPhysicEffect = ptr TPhysicEffect
+  TPhysicEffect = object
+    lifetime: float
+    shape: chipmunk.PShape
+    circ: sfml.PCircleShape
+    func: proc(arb: PArbiter; space: PSpace){.closure.}
+
 import vehicles
 const
   LGrabbable*  = (1 shl 0).TLayers
@@ -50,18 +58,22 @@ const
   LPlayerFire* = (LEnemy).TLayers
   CTBullet = 1.TCollisionType
   CTVehicle= 2.TCollisionType
+  CtPhysEffect = 100.TCollisionType
+  
+  
   ##temporary constants
   W_LIMIT = 2.3
   V_LIMIT = 35
   MaxLocalBots = 3
 var
   localPlayer: PPlayer
-  localBots: seq[PPlayer] = @[]
+  players: seq[PPlayer] = @[]
   activeVehicle: PVehicle
   myVehicles: seq[PVehicle] = @[]
   objects: seq[PGameObject] = @[]
   liveBullets: seq[PLiveBullet] = @[]
   explosions: seq[PAnimation] = @[]
+  activeEffects: seq[PPhysicEffect] = @[]
   gameRunning = true
   frameRate = newClock()
   showStars = off
@@ -145,8 +157,8 @@ proc explode*(b: PLiveBullet)
 proc collisionBulletPlayer(arb: PArbiter; space: PSpace; 
                             data: pointer): Bool{.cdecl.} =
   var 
-    bullet = cast[PLiveBullet](arb.a.data)
-    target = cast[PVehicle](arb.b.data)
+    bullet = cast[PLiveBullet](arb.a.getUserData)
+    target = cast[PVehicle](arb.b.getUserData)
   if target.occupant.isNil or target.occupant == bullet.fromPlayer: return
   bullet.explode()
 
@@ -154,13 +166,53 @@ proc angularDampingSim(body: PBody, gravity: TVector, damping, dt: CpFloat){.cde
   body.w -= (body.w * 0.98 * dt) 
   body.updateVelocity(gravity, damping, dt)
 
+template `***`(a: expr): pointer = cast[pointer](a)
+
+type TShapearr = array[0..512, byte]
+proc debugByte(a: pointer; size: int; highlights: varargs[int]) =
+  var arr = cast[cstring](a)
+  var res = ""
+  var h = @highlights
+  for i in 0..size-1:
+    if i in h: res.add "\27[41m \27[0m"
+    else: res.add" "
+    res.add tohex(arr[i].int, 2)
+    if (i+1) mod 16 == 0:
+      res.add "\n"
+  echo res
+    
+proc handleExplosionEffect(arb: PArbiter; space: PSpace; 
+                            data: pointer): bool {.cdecl.}=
+  if not arb.a.data.isNil:
+    #echo(repr(arb))
+    echo("\n", 
+         repr(arb.a.getUserData()),
+         repr(cast[array[0..7,byte]](arb.a.getUserData())),
+         int(arb.a.get_collisiontype()),
+        )
+    debugByte(***arb.a, 300, 94, 94-8)
+    
+    let expl = cast[PPhysicEffect](arb.a.getUserData())
+    echo("lifetime: ", ff(expl.lifetime, 5))
+    if expl.lifetime != 0.0:
+      #echo(repr(expl))
+      try:
+        expl.func(arb, space)
+      except:
+        echo"Exception! trying other one.."
+        var x = cast[PPhysicEffect](arb.b.getUserData())
+        echo(ff(x.lifetime, 5))
+        x.func(arb, space)
+        
+
 proc initLevel() =
   loadAllAssets()
   
   if not space.isNil: space.destroy()
   space = newSpace()
-  space.addCollisionHandler CTBullet, CTVehicle, collisionBulletPlayer,
-    nil, nil, nil, nil
+  space.addCollisionHandler(CTBullet, CTVehicle, begin = collisionBulletPlayer)
+  space.addCollisionHandler(CTPhysEffect, CTVehicle, preSolve = handleExplosionEffect)
+  space.addCollisionHAndler(CtPhysEffect, CtBullet, presolve = handleExplosionEffect)
   
   let levelSettings = getLevelSettings()
   levelArea.width = levelSettings.size.x
@@ -217,14 +269,81 @@ template newExplosion(obj, animation): stmt =
 template newExplosion(obj, animation, angle): stmt =
   explosions.add(newAnimation(animation, AnimOnce, obj.body.getPos.cp2sfml, angle))
 
+
+proc free(eff: PPhysicEffect) =
+  eff.shape.getBody.free()
+  eff.shape.free()
+  eff.circ.destroy()
+  echo "Explosion effect freed!"
+
+proc update*(obj: PPhysicEffect; dt: float): bool =
+  ## returns true if it should be removed
+  obj.lifetime -= dt
+  if obj.lifetime <= 0.0:
+    if not obj.shape.isNil:
+      space.removeShape obj.shape
+      if not obj.shape.getBody.isRogue:
+        space.removeBody obj.shape.getBody
+    return true
+
+proc draw*(window: PRenderWindow; obj: PPhysicEffect) {.inline.} =
+  window.draw(obj.circ)
+
+proc instanceExplosionEffect(eff: PExplosionEffect; pos: TVector) =
+  case eff.kind
+  of ExplRepel, ExplGravity:
+    var x: PPhysicEffect = cast[PPhysicEffect](alloc0(sizeof(TPhysicEffect)))
+    #new(x, free)
+    x.lifetime = 0.5
+    echo "new repel"
+    var body = newBody(CpInfinity, CpInfinity)
+    body.setPos pos
+    x.shape = space.addShape(newCircleShape(body, eff.radius.float, vectorZero))
+    x.shape.setSensor true
+    x.shape.setCollisionType CtPhysEffect
+    
+    x.func = proc(arb: PArbiter; space: PSpace) {.closure.} =
+      let dist = arb.bodyA.getPos() - arb.bodyB.getPos()
+      arb.bodyB.applyImpulse(dist.normalize() * (1.0 / dist.len() * eff.force.float), vectorZero)
+    
+    x.circ = sfml.newCircleShape(eff.radius.float, 30)
+    x.circ.setOutlineColor Red
+    x.circ.setoutlineThickness 3.2
+    x.circ.setFillColor Transparent
+    x.circ.setOrigin(vec2f(eff.radius.float, eff.radius.float))
+    x.circ.setPosition vec2f(pos)
+    
+    ##discard space.addShape(x.shape)
+    activeEffects.add x
+    x.shape.setUserData(*** activeEffects[len(activeEffects)-1])
+    echo "func is ", repr(x.func)
+  else: nil
+  
+
+##post-step callback
+proc removeBullet*(space: PSpace; key, data: pointer) {.cdecl.} =
+  var bullet = cast[PLiveBullet](data)
+  space.removeShape bullet.shape
+  space.removeBody bullet.body
+  if not bullet.record.explosion.effect.isNil and 
+    bullet.record.explosion.effect.kind != ExplNone:
+    instanceExplosionEffect(
+      bullet.record.explosion.effect, 
+      bullet.body.getPos())
+
 proc explode*(b: PLiveBullet) =
   if b.dead: return
   b.dead = true
-  space.removeShape b.shape
-  space.removeBody b.body
+  
+  if space.isLocked:
+    space.addPostStepCallback removeBullet, ***b, ***b
+  else:
+    space.removeBullet nil, ***b
+  
   if not b.record.explosion.anim.isNil:
     newExplosion(b, b.record.explosion.anim)
-  playSound(b.record.explosion.sound, b.body.getPos())
+  unless b.record.explosion.sound.isNil:
+    playSound(b.record.explosion.sound, b.body.getPos())
 
 proc bulletUpdate(body: PBody, gravity: TVector, damping, dt: CpFloat){.cdecl.} =
   body.updateVelocity(gravity, damping, dt)
@@ -251,7 +370,7 @@ proc newBullet*(record: PBulletRecord; fromPlayer: PPlayer): PLiveBullet =
   else:
     result.shape.setLayers(LEnemyFire)
   result.shape.setCollisionType CTBullet
-  result.shape.setUserData(cast[ptr TLiveBullet](result))
+  result.shape.setUserData(***result)
   let 
     fireAngle = fromPlayer.vehicle.body.getAngle()
     fireAngleV = vectorForAngle(fireAngle)
@@ -280,21 +399,17 @@ proc draw*(window: PRenderWindow; b: PLiveBullet) {.inline.} =
 
 
 proc free*(veh: PVehicle) =
-  ("Destroying vehicle "& veh.record.name).echo
-  destroy(veh.sprite)
+  echo "Freeing vehicle ", veh.record.name
   if veh.shape.isNil: "Free'd vehicle's shape was NIL!".echo
   else: space.removeShape(veh.shape)
   if veh.body.isNil: "Free'd vehicle's BODY was NIL!".echo
   else: space.removeBody(veh.body)
   veh.body.free()
   veh.shape.free()
-  veh.sprite = nil
-  veh.body   = nil
-  veh.shape  = nil
-
+  veh.sprite.destroy()
 
 proc newVehicle*(record: PVehicleRecord): PVehicle =
-  echo("Creating "& record.name)
+  echo "Creating ", record.name
   new(result, free)
   result.record = record
   result.sprite = result.record.anim.spriteSheet.sprite.copy()
@@ -304,7 +419,7 @@ proc newVehicle*(record: PVehicleRecord): PVehicle =
   result.body.setVelLimit result.record.handling.topSpeed
   result.body.velocityFunc = angularDampingSim
   result.shape.setCollisionType CTVehicle
-  result.shape.setUserData(cast[ptr TVehicle](result))
+  result.shape.setUserData(***result)
 proc newVehicle*(name: string): PVehicle =
   result = newVehicle(fetchVeh(name))
 
@@ -350,19 +465,29 @@ proc setVehicle(p: PPlayer; v: PVehicle) =
   p.vehicle = v  #sorry mom, this is just how things worked out ;(
   if not v.isNil: 
     v.occupant = p
+    p.spectator = false
+
+proc warp(p: PPlayer; x, y: int) =
+  if not p.vehicle.isNil:
+    p.vehicle.body.setPos(vector(x.float, y.float))
+    
 
 proc createBot() =
-  if localBots.len < MaxLocalBots:
+  #if localBots.len < MaxLocalBots:
+  when true:
     var bot = newPlayer("Dodo Brown")
-    bot.setVehicle(newVehicle("Turret0"))
+    bot.setVehicle(newVehicle("Masta"))
     if bot.isNil:
       echo "BOT IS NIL"
       return
     elif bot.vehicle.isNil:
       echo "BOT VEH IS NIL"
       return
-    localBots.add(bot)
-    bot.vehicle.body.setPos(vector(100, 100))
+    elif bot.vehicle.sprite.isNil:
+      echo "SPRITEIS NIL"
+      return
+    players.add(bot)
+    bot.warp(100, 100)
     echo "new bot at ", $bot.vehicle.body.getPos()
 
 var inputCursor = newVertexArray(sfml.Lines, 2)
@@ -377,12 +502,12 @@ proc setMyVehicle(v: PVehicle) {.inline.} =
   localPlayer.setVehicle v
 
 proc unspec() =
-  var veh = newVehicle("Turret0")
+  var veh = newVehicle("Masta")
   if not veh.isNil:
     setMyVehicle veh
     localPlayer.spectator = false
     ingameClient.setActive
-    veh.body.setPos vector(100, 100)
+    localPlayer.warp 100, 100
     veh.shape.setLayers(LPlayer)
     when defined(debugWeps):
       localPlayer.addItem("Mass Driver")
@@ -461,8 +586,11 @@ when defined(recordMode):
 when defined(DebugKeys):
   ingameClient.registerHandler MouseRight, down, proc() = 
     echo($activevehicle.body.getAngle.vectorForAngle())
-  ingameClient.registerHandler KeyBackslash, down, proc() = 
-    createBot()
+  ingameClient.registerHandler KeyBackslash, down, proc() =
+    if players.len > 0:
+      echo repr(players[0].vehicle.sprite)
+    else:
+      createBot()
   ingameClient.registerHandler(KeyNum1, down, proc() =
     if localPlayer.items.len == 0:
       localPlayer.addItem("Mass Driver")
@@ -568,7 +696,7 @@ proc mainUpdate(dt: float) =
   if localPlayer != nil: 
     localPlayer.update()
     localPlayer.updateItems(dt)
-  for b in localBots:
+  for b in players:
     b.update()
   
   for o in items(objects):
@@ -578,6 +706,12 @@ proc mainUpdate(dt: float) =
   delObjects.setLen 0
   
   var i = 0
+  while i < len(activeEffects):
+    if activeEffects[i].update(dt):
+      activeEffects.del i
+    else:
+      inc i
+  i = 0
   while i < len(liveBullets):
     if liveBullets[i].update(dt):
       liveBullets.del i
@@ -626,13 +760,14 @@ proc mainRender() =
       window.draw(star.sprite)
   window.draw(localPlayer)
   
-  for b in localBots:
-    window.draw(b)
+  for b in 0..high(players):
+    window.draw(players[b])
   for o in objects:
     window.draw(o)
   
   for b in explosions: window.draw(b)
   for b in liveBullets: window.draw(b)
+  for b in activeeffects: window.draw(b.circ)
   
   when defined(Foo):
     window.draw(mouseSprite)

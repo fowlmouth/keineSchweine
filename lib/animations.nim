@@ -1,6 +1,6 @@
 import
   math,
-  sfml, chipmunk,
+  csfml, chipmunk,
   sg_assets, sfml_stuff, math_helpers
 type
   PAnimation* = ref TAnimation

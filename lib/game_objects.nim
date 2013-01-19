@@ -1,4 +1,4 @@
-import chipmunk, sfml, animations, sg_assets
+import chipmunk, csfml, animations, sg_assets
 type
   PGameObject* = ref TGameObject
   TGameObject = object
