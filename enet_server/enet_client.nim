@@ -1,5 +1,5 @@
 import enet, strutils,
-  sfml, sfml_colors, sg_gui, input_helpers,
+  csfml, csfml_colors, sg_gui, input_helpers,
   math_helpers, sg_packets, estreams, tables,
   json, sg_assets, client_helpers
 if enetInit() != 0:
@@ -164,7 +164,7 @@ proc lobbyInit*() =
     onClick = tryConnect)
   pos.y += 20
   gui.newButton("Test Files", position = pos, onClick = proc(b: PButton) =
-    var req = newCsZoneJoinReq(myCreds)
+    var req: CSzonejoinreq = newCsZoneJoinReq(myCreds)
     dirServer.send HZoneJoinReq, req)
   pos.y += 20
   connectionButtons.add(gui.newButton(

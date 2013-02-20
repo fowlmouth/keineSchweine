@@ -17,9 +17,9 @@ when not defined(NoChipmunk):
 proc vec2f*(a: TVector2i): TVector2f =
   result.x = a.x.cfloat
   result.y = a.y.cfloat
-proc vec2i*(a: TVector2f): TVector2i =
+discard """ proc vec2i*(a: TVector2f): TVector2i =
   result.x = a.x.cint
-  result.y = a.y.cint
+  result.y = a.y.cint """
 proc vec3f*(x, y, z: float): TVector3f =
   result.x = x.cfloat
   result.y = y.cfloat

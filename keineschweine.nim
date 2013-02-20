@@ -45,7 +45,7 @@ type
   TPhysicEffect = object
     lifetime: float
     shape: chipmunk.PShape
-    circ: sfml.PCircleShape
+    circ: csfml.PCircleShape
     func: proc(arb: PArbiter; space: PSpace){.closure.}
 
 import vehicles
@@ -110,7 +110,7 @@ when defined(escapeMenuTest):
   ingameClient.registerHandler(KeyEscape, down, toggleEscape)
   specInputClient.registerHandler(KeyEscape, down, toggleEscape)
 when defined(foo):
-  var mouseSprite: sfml.PCircleShape
+  var mouseSprite: csfml.PCircleShape
 when defined(recordMode):
   var 
     snapshots: seq[PImage] = @[]
@@ -190,21 +190,33 @@ proc handleExplosionEffect(arb: PArbiter; space: PSpace;
          repr(cast[array[0..7,byte]](arb.a.getUserData())),
          int(arb.a.get_collisiontype()),
         )
-    debugByte(***arb.a, 300, 94, 94-8)
     
     let expl = cast[PPhysicEffect](arb.a.getUserData())
     echo("lifetime: ", ff(expl.lifetime, 5))
     if expl.lifetime != 0.0:
       #echo(repr(expl))
       try:
+        var earlyret = false
+        if expl.func.isNil:
+          echo "Explosion function is NIL LOL"
+          earlyret = true
+        if arb.isNil:
+          echo "arb is nil LOL"
+          earlyret = true
+        if space.isNil:
+          echo "SPACE IS NIL??!?!"
+          earlyret = true
+        if earlyret: return
         expl.func(arb, space)
       except:
         echo"Exception! trying other one.."
         var x = cast[PPhysicEffect](arb.b.getUserData())
         echo(ff(x.lifetime, 5))
         x.func(arb, space)
-        
 
+
+
+proc unspec(veh_id: int = 0)
 proc initLevel() =
   loadAllAssets()
   
@@ -241,8 +253,8 @@ proc initLevel() =
     shipSelect.newButton(
       veh.name,
       position = pos, 
-      onClick = proc(b: PButton) = 
-        echo "-__-")
+      onClick = proc(b: PButton) =
+        unspec(veh.id))
     pos.y += 18.0
 
 
@@ -306,7 +318,7 @@ proc instanceExplosionEffect(eff: PExplosionEffect; pos: TVector) =
       let dist = arb.bodyA.getPos() - arb.bodyB.getPos()
       arb.bodyB.applyImpulse(dist.normalize() * (1.0 / dist.len() * eff.force.float), vectorZero)
     
-    x.circ = sfml.newCircleShape(eff.radius.float, 30)
+    x.circ = csfml.newCircleShape(eff.radius.float, 30)
     x.circ.setOutlineColor Red
     x.circ.setoutlineThickness 3.2
     x.circ.setFillColor Transparent
@@ -420,8 +432,8 @@ proc newVehicle*(record: PVehicleRecord): PVehicle =
   result.body.velocityFunc = angularDampingSim
   result.shape.setCollisionType CTVehicle
   result.shape.setUserData(***result)
-proc newVehicle*(name: string): PVehicle =
-  result = newVehicle(fetchVeh(name))
+proc newVehicle*(name: string): PVehicle = newVehicle(fetchVeh(name))
+proc newVehicle*(id: int): PVehicle = newVehicle(fetchVeh(id))
 
 proc update*(obj: PVehicle) =
   obj.sprite.setPosition(obj.body.getPos.floor)
@@ -490,7 +502,7 @@ proc createBot() =
     bot.warp(100, 100)
     echo "new bot at ", $bot.vehicle.body.getPos()
 
-var inputCursor = newVertexArray(sfml.Lines, 2)
+var inputCursor = newVertexArray(csfml.Lines, 2)
 inputCursor[0].position = vec2f(10.0, 10.0)
 inputCursor[1].position = vec2f(50.0, 90.0)
 
@@ -501,8 +513,8 @@ proc setMyVehicle(v: PVehicle) {.inline.} =
   activeVehicle = v
   localPlayer.setVehicle v
 
-proc unspec() =
-  var veh = newVehicle("Masta")
+proc unspec(veh_id: int = 0) =
+  var veh = newVehicle(veh_id)
   if not veh.isNil:
     setMyVehicle veh
     localPlayer.spectator = false
@@ -687,7 +699,7 @@ proc mainUpdate(dt: float) =
       localPlayer.useItem 3
     if Keypressed(keyA):
       localPlayer.useItem 4
-    if keyPressed(sfml.KeyS):
+    if keyPressed(csfml.KeyS):
       localPlayer.useItem 5
     if keyPressed(KeyD):
       localPlayer.useItem 6
@@ -812,7 +824,7 @@ when isMainModule:
   shipSelect.setPosition vec2f(665.0, 50.0)
   
   when defined(foo):
-    mouseSprite = sfml.newCircleShape(14)
+    mouseSprite = csfml.newCircleShape(14)
     mouseSprite.setFillColor Transparent
     mouseSprite.setOutlineColor RoyalBlue
     mouseSprite.setOutlineThickness 1.4

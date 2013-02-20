@@ -133,6 +133,12 @@ var
   nameToBulletID*: TTable[string, int]
   activeState = Lobby
 
+
+## TODO temp function, remove asap
+proc debug_p[A](some: A): A {.inline, nosideeffect.}=
+  debug_echo($some)
+  return some
+
 proc newSprite(filename: string; errors: var seq[string]): PSpriteSheet
 proc load*(ss: PSpriteSheet): bool {.discardable.}
 proc newSound(filename: string; errors: var seq[string]): PSoundRecord
@@ -409,8 +415,11 @@ proc loadSettings*(rawJson: string, errors: var seq[string]): bool =
 proc `$`*(obj: PSpriteSheet): string =
   return "<Sprite $1 ($2x$3) $4 rows $5 cols>" % [obj.file, $obj.framew, $obj.frameh, $obj.rows, $obj.cols]
 
-proc fetchVeh*(name: string): PVehicleRecord =
-  return cfg.vehicles[nameToVehID[name]]
+proc fetchVeh*(id: int): PVehicleRecord = 
+  if id > cfg.vehicles.high or id < 0: 
+    echo "Invalid vehicle ID ", id
+  return cfg.vehicles[id]
+proc fetchVeh*(name: string): PVehicleRecord = fetchVeh(nameToVehID[name])
 proc fetchItm*(itm: string): PItemRecord =
   return cfg.items[nameToItemID[itm]]
 proc fetchObj*(name: string): PObjectRecord =
@@ -532,7 +541,7 @@ proc importExplosionEffect(data: PJsonNode; errors: var seq[string];
     echo"none"
     return
   let eff = data[key]
-  case eff[0].str.tolower
+  case debug_p(eff[0].str).tolower
   of "repel":
     result.kind = ExplRepel
     result.radius = eff[1].num.int
