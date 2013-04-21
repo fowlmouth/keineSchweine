@@ -7,6 +7,3 @@
 [submodule "dependencies/nake"]
 	path = dependencies/nake
 	url = git://gist.github.com/3607822.git
-[submodule "dependencies/new-enet"]
-	path = dependencies/new-enet
-	url = https://github.com/fowlmouth/nimrod-enet.git
